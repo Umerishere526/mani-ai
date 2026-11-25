@@ -3,7 +3,7 @@
 - **From:** Lolly
 - **To:** muhammad
 - **Received:** 2026-10-12
-- **Scenario:** `job_decision` in [scenarios.json](../../../backend/scripts/scenarios.json)
+- **Scenario:** `job_decision` in `backend/scripts/scenarios.json`, deleted in commit `2cc9f15` with the scenario script (read it with `git show 2cc9f15^:backend/scripts/scenarios.json`)
 - **Requirements drawn from it:** [R3, R4](../requirements.md#requirements)
 
 The style is written "Direct", the name before migration 019, so it was most likely tested on the

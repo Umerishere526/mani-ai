@@ -59,4 +59,4 @@ or call or text 988 to talk with someone right away. I'll be here when you come 
 The model's safety read of her last three messages: `unsure` about `from_someone`, `unsure` about `from_someone`, then
 `unsure` about `themselves`, with the line "no self-harm or immediate danger is stated". The model never judged danger.
 Code raised the second unsure to danger because MANI had already asked once, and paused the next message because the
-state before it was danger. See [[unsure-never-pauses-2026-11-20]] in the journal.
+state before it was danger. See [unsure-never-pauses-2026-11-20](../../../mani-vault/Journal/unsure-never-pauses-2026-11-20.md) in the journal.

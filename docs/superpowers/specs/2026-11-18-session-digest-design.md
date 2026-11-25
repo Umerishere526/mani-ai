@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): a design or plan as written at the time; parts no longer match the code (the return check after a pause, for one, is gone). What the backend does today is in `backend/PORT-STATUS.md`.
+
 # Every new Claude session starts with the decisions in force and the approaches that failed
 
 Approved approach: A (muhammad, 2026-11-18). Short design.

@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): a design or plan as written at the time; parts no longer match the code (the return check after a pause, for one, is gone). What the backend does today is in `backend/PORT-STATUS.md`.
+
 # One-call conversation: the rebuild of Mani's turn
 
 Date: 2026-11-17. Author: Claude, with muhammad. Status: draft for muhammad's approval.

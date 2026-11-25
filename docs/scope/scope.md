@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): this scope stopped being updated on 2026-10-13 and describes code since replaced. What the backend does today is in `backend/PORT-STATUS.md`.
+
 # Scope: Mani lean prompts
 
 Mani is a mental health companion. This scope covers how Mani talks to the model: a short base prompt of general rules, each framework in about 8 lines saying when it starts, when to skip it and when it ends, nothing hardcoded in prompts or in Python, no checks that redraft or rewrite the reply, and a thinking level set on every call. The goal is fewer tokens and lower latency now, and prompts that get better as models get faster.

@@ -4,19 +4,24 @@ What the backend does today and what is still open. Stack notes: `.claude/BACKEN
 `.claude/SUPABASE.md`. **Update this file in
 the same change as the work.**
 
-## Status, 2026-11-18
+## Status, 2026-11-25
 
 - The TypeScript to Python port is complete. FastAPI is the only thing that touches the database.
-- Tests: `pytest` runs 338 tests, 325 passing and 13 skipped (2026-11-18, after the one-call rebuild): the 13 mint a
-  symmetric token and skip on a JWKS-configured project.
-- Database: 34 migrations (000 to 010 and 018 to 040), 19 tables (10 `public`, 9 `admin`), 2 frameworks and 3 prompts
-  seeded (`mani`, `summarization`).
+- Tests: `pytest` runs 493 tests, all passing against the local database (2026-11-25); the tests that mint a
+  symmetric token skip on a JWKS-configured project. `scripts/test_db.sh` runs the schema, RLS and privilege suites.
+- Database: 38 migrations (000 to 010, 018 to 042, 044 and 048; 043 is held by a stashed branch and 045 to 047 by
+  the library's branch), 18 tables (10 `public`, 8 `admin`), 2 active frameworks and 2 active prompts seeded
+  (`mani`, `summarization`).
   `admin.exercises` holds the 30 library exercises from `content/exercises/` (as "mani-app" holds them on 2026-11-13;
   the other hosted project was not compared), with their audio in the
-  private `exercises` bucket (`scripts/seed_exercises.py`). Two hosted projects held every migration of the time and
-  the same data (2026-11-06): `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1, the Hobby deployment's database)
-  and `aipgficduzufstilndbw` "mani-app" (the Mani org, us-east-1, for the Vercel Pro deployment). Migration 037 has
-  run only on this machine's databases (2026-11-13), and 039 and 040 likewise (2026-11-18).
+  private `exercises` bucket (`scripts/seed_exercises.py`). Hosting, two stories that have not been reconciled:
+  (1) `aipgficduzufstilndbw` "mani-app" (the Mani org, us-east-1) for the Vercel Pro deployment, which took 039 to 041
+  after the PR #58 deploy (2026-11-18) and 042 (muhammad, 2026-11-24): the more recent evidence, still unverified
+  against the dashboards; (2) `heqenombgkihfeggrxqc` (muhammad's org, ca-central-1) for a Vercel Hobby deployment in
+  iad1, described as production in Open engineering: last checked 2026-11-05, **unverified since**. Both held every
+  migration of the time and the same data on 2026-11-06. Which one serves real traffic, and whether the other is
+  retired, is for muhammad to confirm. 037 to 040 were first run on this machine's databases; 048 has run only here
+  (2026-11-25).
 - Models: the chat turn runs on `deepseek/deepseek-v4.1-flash-1017` at reasoning effort `high`, routed only to
   `sail-research` then `deepinfra`, sorted by price, with `zdr: true` (muhammad, 2026-11-22), as the `mani` prompt row names them (`content/prompts/mani.md` frontmatter, seeded into
   `admin.prompts`; see Decisions in force). Summaries run on `openai/gpt-6-luna` at `high`, routed
@@ -30,7 +35,9 @@ the same change as the work.**
   `max_tokens` for the reply alone, so `chain.sampling` adds `REASONING_ALLOWANCE_TOKENS` (8,192) on top, MiniMax
   included (`chain.ALWAYS_REASONING_PREFIXES`). Without it, at effort high, 4 of 61 chat calls ran out of tokens while
   thinking and the turn failed (2026-10-07). Measured by the rebuild's evaluation on the real stack: MiniMax at `low`
-  answered a turn in a median of 3.8 s for about $0.00045 (`evals/results/`, 2026-11-17).
+  answered a turn in a median of 3.8 s for about $0.00045 (`evals/results/`, 2026-11-17). That was a different model
+  at a different effort: the chat now runs DeepSeek V4.1 Flash at `high`, whose turn time has not been measured the
+  same way, so 3.8 s says nothing about R2's 4 s today.
 - A seed that changes a prompt keeps the row it replaces in `admin.prompt_versions` and moves the prompt's `version`
   on, so which prompt was live when can be read back (`seed.seed_prompt`, `config_tables.SNAPSHOT_PROMPT`;
   `tests/integration/test_seed_history.py`). Rows seeded before 2026-11-25 have no history.
@@ -170,7 +177,7 @@ the same change as the work.**
   $0.016 (over budget) and DeepSeek V4.1 Flash scored 3.64 but judged chest pain with arm symptoms `unsure` in 4 of 9
   runs (MiniMax `danger` in 9 of 9); three prompt variants did not move the cheap models past about 3.6, so the gap is
   the model's (2026-11-17). The model, effort and hosts live in the `mani` row (`model_id`,
-  `model_parameters.reasoning_effort`, `routing: {only: [modelrun, fireworks, makora], zdr: true}`), from `content/prompts/mani.md`'s frontmatter through `scripts/seed.py`, never in environment
+  `model_parameters.reasoning_effort`, `routing: {only: [sail-research, deepinfra], sort: price, zdr: true}`), from `content/prompts/mani.md`'s frontmatter through `scripts/seed.py`, never in environment
   variables; never the model makers' own APIs or other China-based hosts. A failing host falls back to the next in
   the list. The row's `only` replaces the settings' OpenAI-only default (`Settings.routing`). Accepted: about 88% of
   the chat model's score. Inferact vLLM, Together and Nebius answer this model with no reasoning at all, so they
@@ -862,8 +869,10 @@ the same change as the work.**
   sends an offer in a reply that reports frustrated". The facts say before the reply when an offer would be refused
   (`facts.NO_OFFER`), so a refusal should not happen; one that does is traced as `refused`, and the reply's text goes
   out with no buttons (`decide._offer`). R91's "unless the user requests it" is not kept: code refuses a declined set
-  even when they ask for it (Open decisions). There is no code floor on timing; if it goes wrong, the fix is a fact
-  (such as how many exchanges have passed), not a rule in code.
+  even when they ask for it (Open decisions). One code floor on timing exists: no offer before the person's third
+  message, the style tap not counted (`decide.OFFER_FROM_MESSAGE = 3`, muhammad, 2026-11-18; the facts say so too,
+  `facts.NO_OFFER`). It sits uneasily with the client's "no fixed number of exchanges"; any other timing problem is
+  fixed with a fact (such as how many exchanges have passed), not a rule in code.
   `test_an_offer_while_a_framework_runs_is_refused_and_shows_no_buttons`,
   `test_an_offer_of_a_declined_framework_is_refused`, `test_an_offer_of_an_unknown_framework_is_refused`,
   `test_an_offer_while_a_safety_worry_is_open_is_refused` in `test_decide.py`,
@@ -1054,8 +1063,8 @@ Ordered by what breaks first.
    the pop-up also links Find A Helpline (findahelpline.com), listed for every country. The specifications refer to an
    approved protocol and helpline list and contain neither. Needs the client's list, by country; until then the pause
    text gives US numbers to everyone, wherever they are.
-5. **The OpenRouter balance and the chat's hosts.** The chat runs only on six zero-data-retention hosts; when none
-   answers, every turn gets the fixed reply. A low balance limits parallel calls and returns 402: keep the account
+5. **The OpenRouter balance and the chat's hosts.** The chat runs only on two zero-data-retention hosts (Sail
+   Research, then DeepInfra; `content/prompts/mani.md`); when neither answers, every turn gets the fixed reply. A low balance limits parallel calls and returns 402: keep the account
    topped up and watch for 402 errors (the design's risks, 2026-11-17).
 6. **Migrations are not run by anything.** `supabase db push` is manual. Migration 044 (`llm_calls.cost_usd`) must be pushed before or with the
    deploy that records it: the code writes the column on every model call (2026-11-24).
@@ -1106,13 +1115,14 @@ I recommend:
 - In 1 of 3 suite runs MiniMax offered ABCDE to an anxious person who had asked three times for "one simple thing to
   try" and was pointed to the library each time ("library only" for exercises). Recommended: keep library only, and
   add this conversation to `evals/suite.json` so any change is measured.
-- MiniMax is an open-weight model from a Chinese lab, served by Western zero-data-retention hosts; the client has not
-  been asked. Recommended: tell her before real traffic.
+- The chat model, DeepSeek V4.1 Flash, is an open-weight model from a Chinese lab, served by US zero-data-retention
+  hosts (Sail Research, DeepInfra); the client has not been asked. Recommended: tell her before real traffic.
 
 Earlier:
 
 - R2's 4 s median (2026-10-14): the rebuild's evaluation measured a median of 3.8 s a turn on MiniMax at `low`
-  (2026-11-17); measure it live and tell the client.
+  (2026-11-17), not the model and effort the chat runs now (DeepSeek V4.1 Flash at `high`); measure it live and tell
+  the client.
 - Tell the client (2026-11-17): inside a set, Mani goes one stage per reply; a stage the chat already answered is said
   back in one sentence and the next stage's question follows, never "Is that right?".
 - Tell the client (2026-10-08): "overwhelming" was removed from the Structured Problem Solving description,
@@ -1144,7 +1154,8 @@ Earlier:
 - **Re-gate the evaluation after the 2026-11-18 changes:** the guide's contraindications (a longer prompt), MiniMax's
   effort now sent, and `run_eval` building production's request. The last gate (3.62, all 21 rules, 2026-11-17)
   measured a different request, so a shift may come from the request, not the code.
-- **Production is Vercel Hobby functions in iad1, with the database in ca-central-1.** Work started after a response
+- **Production is Vercel Hobby functions in iad1, with the database in ca-central-1** (as of 2026-11-05, **unverified
+  since**; the Status section's hosting note has the other story, Vercel Pro on "mani-app" in us-east-1). Work started after a response
   was lost there: it suspends or ends the function (Vercel's `waitUntil` is Node and Edge only). Nothing runs after a
   response any more (2026-11-05); the app asks for the summary (see "Mani's notes" in Decisions in force). The rest of
   this entry is the evidence from before that: 15 of 49 `understanding` calls of

@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): a design or plan as written at the time; parts no longer match the code (the return check after a pause, for one, is gone). What the backend does today is in `backend/PORT-STATUS.md`.
+
 # Every chat stands alone
 
 Date: 2026-11-18. Approved: muhammad, 2026-11-18. Size: a small change. Everything is decided and the work is mostly

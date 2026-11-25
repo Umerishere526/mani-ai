@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): this spec describes code deleted or rebuilt since, most of it with the one-call turn of 2026-11-17. What the backend does today is in `backend/PORT-STATUS.md`.
+
 # 0002. Measure turn cost and latency with a repeatable eval baseline
 
 **Date**: 2026-10-07
