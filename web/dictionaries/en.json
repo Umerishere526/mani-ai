@@ -56,6 +56,9 @@
         "showOnHomeScreenLabel": "Show on Home Screen",
         "showOnHomeScreenHelper": "Home screen exercises appear as quick-action cards on the mobile app home screen.",
         "categoryLabel": "Category",
+        "categoryPlaceholder": "Choose a category",
+        "typeLabel": "Type",
+        "typePlaceholder": "Choose a type",
         "displayOrderLabel": "Display Order",
         "displayOrderHelper": "Lower numbers appear first within the category",
         "audioLabel": "Audio File (MP3) *",
@@ -63,20 +66,32 @@
         "audioDurationPrefix": "Duration: ",
         "audioDurationSuffix": " minute",
         "audioDurationSuffixPlural": " minutes",
-        "audioUploading": "Uploading and analyzing...",
-        "audioHelper": "Upload an MP3 file. Duration will be extracted automatically.",
+        "audioUploading": "Uploading...",
+        "audioHelper": "Upload an MP3 file. Its length is read from the file.",
+        "audioTypeError": "Choose an MP3 file.",
+        "audioReadError": "This file could not be read as audio.",
+        "audioUploadError": "The upload did not finish. Please try again.",
         "activeLabel": "Active",
         "activeHelper": "Inactive exercises are hidden from users",
         "defaultSubmit": "Save Exercise",
-        "invalidInput": "Title, category and an uploaded audio file are required."
+        "invalidInput": "Title, category, type and an uploaded audio file are required."
       },
       "categories": {
-        "EmotionalIntelligence": "Emotional Intelligence",
-        "NarcissisticDynamics": "Narcissistic Dynamics",
-        "BuildingHabits": "Building Habits",
-        "Boundaries": "Boundaries",
         "Anxiety": "Anxiety",
-        "Burnout": "Burnout"
+        "Boundaries": "Boundaries",
+        "BuildingHabits": "Building New Habits",
+        "Burnout": "Burnout",
+        "EmotionalIntelligence": "Emotional Intelligence",
+        "LoveRelationships": "Love & Relationships",
+        "ManagingWorry": "Managing Worry",
+        "Sleep": "Sleep"
+      },
+      "exerciseTypes": {
+        "Breathing": "Breathing",
+        "Meditation": "Meditation",
+        "Movement": "Movement",
+        "Story": "Story",
+        "Visualization": "Visualization"
       }
     },
     "pages": {

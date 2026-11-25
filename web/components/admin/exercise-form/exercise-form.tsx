@@ -1,4 +1,4 @@
-// ABOUTME: Create/edit form for a guided exercise — basic info, category, audio upload, status.
+// ABOUTME: Create/edit form for a guided exercise — basic info, category and type, audio upload, status.
 // ABOUTME: Saving runs the saveExercise server action, which creates or updates it in the backend.
 
 "use client";
@@ -6,10 +6,12 @@
 import { useState, useTransition, type SubmitEvent } from "react";
 import { useRouter } from "next/navigation";
 import { saveExercise } from "@/lib/actions/exercises";
+import { useExerciseAudioUpload } from "@/hooks/use-exercise-audio-upload";
 import type { AdminExercise } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 import { ExerciseBasicFields } from "./exercise-basic-fields";
 import { ExerciseAudioField } from "./exercise-audio-field";
+import { ExerciseClassificationFields } from "./exercise-classification-fields";
 
 const STRINGS = dictionary.admin.forms.exercise;
 const COMMON = dictionary.admin.forms;
@@ -23,28 +25,11 @@ export function ExerciseForm({ exercise, submitLabel = STRINGS.defaultSubmit }: 
   const router = useRouter();
   const [isPending, startTransition] = useTransition();
   const [showOnHomeScreen, setShowOnHomeScreen] = useState(exercise?.showOnHomeScreen ?? false);
-  const [audioPath, setAudioPath] = useState<string | null>(exercise?.audioPath ?? null);
-  const [durationMinutes, setDurationMinutes] = useState<number | null>(
-    exercise?.durationMinutes ?? null,
-  );
-  const [isUploading, setIsUploading] = useState(false);
-  const [uploadError, setUploadError] = useState<string | null>(null);
-  const [fileName, setFileName] = useState<string | null>(null);
+  const { audioPath, durationMinutes, fileName, isUploading, uploadError, upload } = useExerciseAudioUpload({
+    audioPath: exercise?.audioPath ?? null,
+    durationMinutes: exercise?.durationMinutes ?? null,
+  });
   const [submitError, setSubmitError] = useState<string | null>(null);
-
-  const handleFileChange = (file: File) => {
-    setIsUploading(true);
-    setUploadError(null);
-
-    // No backend yet — a real upload extracts duration via music-metadata server-side.
-    // Fakes a plausible result so the form flow is reachable end-to-end.
-    window.setTimeout(() => {
-      setAudioPath(`exercises/${encodeURIComponent(file.name)}`);
-      setDurationMinutes(Math.round((3 + Math.random() * 5) * 10) / 10);
-      setFileName(file.name);
-      setIsUploading(false);
-    }, 600);
-  };
 
   const handleSubmit = (e: SubmitEvent<HTMLFormElement>) => {
     e.preventDefault();
@@ -69,6 +54,8 @@ export function ExerciseForm({ exercise, submitLabel = STRINGS.defaultSubmit }: 
         onShowOnHomeScreenChange={setShowOnHomeScreen}
       />
 
+      <ExerciseClassificationFields exercise={exercise} />
+
       <ExerciseAudioField
         exercise={exercise}
         audioPath={audioPath}
@@ -76,7 +63,7 @@ export function ExerciseForm({ exercise, submitLabel = STRINGS.defaultSubmit }: 
         fileName={fileName}
         isUploading={isUploading}
         uploadError={uploadError}
-        onFileChange={handleFileChange}
+        onFileChange={upload}
       />
 
       <input type="hidden" name="audioPath" value={audioPath ?? ""} />

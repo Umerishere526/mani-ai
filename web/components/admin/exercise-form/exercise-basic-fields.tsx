@@ -1,4 +1,4 @@
-// ABOUTME: Field group for ExerciseForm — title, description, home-screen toggle, category, order.
+// ABOUTME: Field group for ExerciseForm — title, description, home-screen toggle, display order.
 // ABOUTME: Split out from exercise-form.tsx to keep the parent component under the line cap.
 
 import type { AdminExercise } from "@/types";
@@ -6,9 +6,6 @@ import dictionary from "@/dictionaries/en.json";
 import { FORM_INPUT_CLASSES, FORM_LABEL_CLASSES, FORM_HELPER_CLASSES } from "../form-field-classes";
 
 const STRINGS = dictionary.admin.forms.exercise;
-const CATEGORY_LABELS = dictionary.admin.forms.categories;
-
-const CATEGORIES = Object.entries(CATEGORY_LABELS).map(([value, label]) => ({ value, label }));
 
 interface ExerciseBasicFieldsProps {
   exercise?: AdminExercise;
@@ -68,25 +65,6 @@ export function ExerciseBasicFields({
           </span>
         </label>
         <p className={FORM_HELPER_CLASSES}>{STRINGS.showOnHomeScreenHelper}</p>
-      </div>
-
-      <div>
-        <label htmlFor="category" className={FORM_LABEL_CLASSES}>
-          {STRINGS.categoryLabel}
-        </label>
-        <select
-          id="category"
-          name="category"
-          required
-          defaultValue={exercise?.category ?? "Anxiety"}
-          className={FORM_INPUT_CLASSES}
-        >
-          {CATEGORIES.map((cat) => (
-            <option key={cat.value} value={cat.value}>
-              {cat.label}
-            </option>
-          ))}
-        </select>
       </div>
 
       <div>
