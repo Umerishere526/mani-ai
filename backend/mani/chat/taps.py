@@ -95,7 +95,7 @@ def tap_event(tapped: SmartPrompt | None, registry: Registry, open_offer: Techni
         return TapEvent(starting=offered, fact=(
             f"They tapped Give me a tool, so {offered.name} starts now. Your reply opens its first stage, `{first}`, "
             f"with its line (\"{line_of(offered, first)}\"). If they have already told you what that stage asks, say it "
-            "back in a sentence, in their words, and ask only whether it is right or what is missing; otherwise ask "
+            "back in a sentence, in their words, and ask openly what they would add or change in it; otherwise ask "
             "that stage's question."))
     if offered is not None and label == TALK_MORE_FIRST:
         return TapEvent(set_aside=True, fact=(

@@ -278,7 +278,7 @@ async def test_give_me_a_tool_starts_the_first_stage_at_once(alice, model):
     turn = await send(alice, thread.id, "Give me a tool")
     assert scripted.calls == 4 and turn.prompts == []
     told = facts_of(scripted)
-    assert "They tapped Give me a tool" in told and "ask only whether it is right or what is missing" in told
+    assert "They tapped Give me a tool" in told and "ask openly what they would add or change in it" in told
     technique = await technique_of(alice, thread.id)
     assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "activate"
 
