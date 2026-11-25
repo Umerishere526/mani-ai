@@ -35,3 +35,10 @@ def test_an_offer_the_schema_did_not_show_still_reads_so_code_can_refuse_it():
 def test_each_distinct_set_of_offers_is_one_schema_from_turn_to_turn():
     assert shaped(("abcde",)) is shaped(("abcde",)) and shaped(()) is not shaped(("abcde",))
     assert shaped(()).__name__ == TurnReply.__name__, "the schema's name is sent with it and stays the same"
+
+
+def test_the_fields_mani_writes_about_people_call_the_person_they():
+    """Mani's notes called the person "he" with no basis (2026-11-25)."""
+    properties = to_strict_json_schema(TurnReply)["properties"]
+    for name in ("notes", "people", "events"):
+        assert 'Call the person "they"' in properties[name]["description"], name

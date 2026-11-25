@@ -89,16 +89,18 @@ class Said(BaseModel):
 
 
 Action = Literal["none", "offer", "finish", "stop", "library"]
+# Mani's notes called the person "he" with no basis (2026-11-25); the fields it writes about people say otherwise.
+NO_GENDER = ' Call the person "they" unless they have said otherwise, and give no one a gender they have not given.'
 
 
 class TurnReply(BaseModel):
     question: Question = Field(default_factory=Question, description="This reply's question and your plan for it, before you write.")
     people: list[Person] = Field(default_factory=list, description=(
         "Everyone they have spoken of in this conversation, rewritten whole each turn from the list in the facts and "
-        "their latest message. Change an entry only when they add to it or correct it. At most 8."))
+        "their latest message. Change an entry only when they add to it or correct it. At most 8." + NO_GENDER))
     events: list[Event] = Field(default_factory=list, description=(
         "What happened, is happening or is coming, as they said it, rewritten whole each turn the same way. An upcoming "
-        "event becomes past only when they say it happened. At most 10."))
+        "event becomes past only when they say it happened. At most 10." + NO_GENDER))
     text: str = Field(description=(
         "What you say to them before your question, exactly as they will read it. It never asks anything: your one "
         "question goes only in question.ask."))
@@ -111,7 +113,7 @@ class TurnReply(BaseModel):
     safety: Safety
     notes: str = Field(description=(
         "Your private working notes for your next turn, under 100 words. People, events and what you said go in their "
-        "own fields."))
+        "own fields." + NO_GENDER))
     library: str | None = Field(default=None, description=(
         "The library section closest to what they have talked about, once one clearly is; null until then. One of: "
         + ", ".join(f'"{section}"' for section in LibrarySection) + "."))
