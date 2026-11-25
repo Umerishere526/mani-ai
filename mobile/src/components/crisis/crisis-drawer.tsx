@@ -48,17 +48,19 @@ export function CrisisDrawer({ visible, onClose }: CrisisDrawerProps) {
         >
           <LinearGradient colors={[colors.primary[500], colors.primary[700]]} className="absolute inset-0" />
 
-          <Pressable
-            className="absolute right-5 top-5 z-10 p-2"
-            onPress={onClose}
-            accessibilityRole="button"
-            accessibilityLabel={en.crisis.closeLabel}
-            hitSlop={8}
-          >
-            <Ionicons name="close" size={24} color={colors.secondary[500]} />
-          </Pressable>
+          <View className="flex-row justify-end px-5 pt-5">
+            <Pressable
+              className="p-2"
+              onPress={onClose}
+              accessibilityRole="button"
+              accessibilityLabel={en.crisis.closeLabel}
+              hitSlop={8}
+            >
+              <Ionicons name="close" size={24} color={colors.secondary[500]} />
+            </Pressable>
+          </View>
 
-          <ScrollView className="px-8 pt-14" showsVerticalScrollIndicator={false} bounces={false}>
+          <ScrollView className="px-8" showsVerticalScrollIndicator={false} bounces={false}>
             <CrisisGuidance />
           </ScrollView>
         </Animated.View>

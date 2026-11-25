@@ -30,16 +30,18 @@ export function CrisisScreen() {
     <Modal visible={isScreenVisible} transparent animationType="fade" onRequestClose={closeScreen}>
       <View className="flex-1 justify-center bg-black/60 px-4 py-12">
         <View className="max-h-full overflow-hidden rounded-xl bg-primary-700">
-          <Pressable
-            className="absolute right-3 top-3 z-10 p-3"
-            onPress={closeScreen}
-            accessibilityRole="button"
-            accessibilityLabel={copy.closeLabel}
-          >
-            <Ionicons name="close" size={24} color={colors.secondary[500]} />
-          </Pressable>
+          <View className="flex-row justify-end px-3 pt-3">
+            <Pressable
+              className="p-3"
+              onPress={closeScreen}
+              accessibilityRole="button"
+              accessibilityLabel={copy.closeLabel}
+            >
+              <Ionicons name="close" size={24} color={colors.secondary[500]} />
+            </Pressable>
+          </View>
 
-          <ScrollView contentContainerClassName="items-center gap-5 px-6 pb-8 pt-14" bounces={false}>
+          <ScrollView contentContainerClassName="items-center gap-5 px-6 pb-8 pt-2" bounces={false}>
             {pause ? null : (
               <Text className="text-center font-sans-semibold text-2xl" accessibilityRole="header">
                 {en.crisis.title}
