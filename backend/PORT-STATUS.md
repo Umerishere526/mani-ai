@@ -271,8 +271,10 @@ the same change as the work.**
 - **Directive replies are short and human: two or three short sentences in the chat and inside the set (where it
   says back no summary; what it understood goes into its question), at most one point and not every reply, a
   few of their own words to show it heard them, then it stays or asks the one question that moves them on (never a
-  pick-from-several), never going back over what was said, never saying sorry (it says what they are trying to say
-  instead, muhammad, 2026-11-24), and A asks for one specific recent event** (muhammad,
+  pick-from-several), never going back over what was said, never saying sorry (it says back, in a few of their words, what they said and takes it one step on;
+  muhammad, 2026-11-24, changed 2026-11-25 because "what they are really trying to say" had Directive state its
+  readings as fact), being straight about options and next steps but never about what they feel or why, and A asks
+  for one specific recent event** (muhammad,
   2026-11-18; two or three sentences and the human voice, muhammad, 2026-11-24, because replies still read long and
   scripted). Because the
   client's sequence document shows Directive's short acknowledgments, and her review of the promotion chat
@@ -282,6 +284,12 @@ the same change as the work.**
   which keep their own length (see the build-up entry below), their possibilities questions and their A. If the eval still finds long Directive replies,
   the next step is code counting sentences and asking once more, not another line. `mani.md`; eval
   `rule-directive-short`, `rule-directive-open-question`, `max_sentences`.
+- **In Directive a fear or feeling they name about a choice is said back and asked about once before options; a
+  choice made on a condition is never their decision; "I can't decide" is not a want for a set of questions**
+  (muhammad, 2026-11-25). Because muhammad's tester found the grandma's-birthday chat jumped to a solution, took "the
+  trip, if my family didn't mind" as a decision, left "they'll think I'm selfish" unexplored and offered Structured
+  Problem Solving on "I can't decide". `mani.md` ("How you listen", "Offering the set of questions"). Not yet
+  eval-gated.
 - **Mani says only what they said, in their tense, about the person they said it of, and assumes no gender; every
   reading is a possibility, each point is made once, and no causal claim the person hasn't made** (muhammad,
   2026-11-18; fidelity added 2026-11-24 from Lolly's and manasa's tests of 11/17-11/23). Because the client's promotion-chat review found readings stated as fact ("That is the core of it"),
