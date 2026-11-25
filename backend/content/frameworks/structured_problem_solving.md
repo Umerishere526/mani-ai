@@ -40,23 +40,9 @@ activation:
     - "The plan would be retaliation, deception, an unsafe confrontation, or harm to the person or someone else"
     - "The situation is abuse, a threat, or emergency danger. It is never a communication problem or an ordinary decision: the safety protocol applies, not a plan"
   redirects:
-    - signal: "I know what to do, but I cannot make myself begin."
-      instead: behavioral_activation
     - signal: "I know my manager will think I am incompetent."
       instead: thought_reframe
-    - signal: "There is nothing I can do to change the outcome."
-      instead: act_choice_point
-    - signal: "I am about to send a message I will regret."
-      instead: dbt_stop
   distinctions:
-    behavioral_activation: >-
-      Structured Problem-Solving when the user does not know what to do, options need
-      generating or comparing, a decision is required. Behavioral Activation when they already
-      know what they could do, beginning is the barrier, and they need one manageable action.
-    act_choice_point: >-
-      Structured Problem-Solving when the problem can be influenced through action. ACT when the
-      outcome remains outside control, facts remain uncertain, no practical solution resolves
-      the central difficulty, or the user needs to choose how to respond.
     thought_reframe: >-
       Structured Problem-Solving when the user needs a plan. Reframe when one interpretation is
       preventing the user from seeing the situation accurately.

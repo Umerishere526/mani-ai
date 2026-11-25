@@ -43,10 +43,6 @@ activation:
   redirects:
     - signal: "I keep thinking I am incompetent, and I want to understand why one criticism affected me so strongly."
       instead: abcde
-    - signal: "I know the thought may never go away, but I do not want it making my decisions."
-      instead: act_choice_point
-    - signal: "I know what I need to do, but I cannot make myself begin."
-      instead: behavioral_activation
   distinctions:
     abcde: >-
       Use Reframe when one thought is already clear, a shorter process is wanted, and the full
@@ -54,12 +50,6 @@ activation:
       deeper understanding and the event, belief and consequences need separating. ABCDE takes
       priority when both fit equally, but never choose ABCDE only because the user expresses a
       troubling thought.
-    act_choice_point: >-
-      Use Reframe when weighing the evidence may help them reconsider the thought. Use ACT when
-      the thought can't be proved or disproved, the uncertainty can't be resolved, examining the
-      thought is keeping the user stuck, or they need to choose how to act while the thought is
-      still there. Reframe asks "What else may be true?" ACT asks "How do you want to respond
-      while this thought is present?"
     continued_conversation: >-
       Keep chatting when the thought is unclear, the user wants to be heard, declines, or doesn't
       want to examine the thought.
