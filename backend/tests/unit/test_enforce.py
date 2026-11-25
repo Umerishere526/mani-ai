@@ -262,3 +262,14 @@ def test_a_question_inside_wording_written_for_them_stays_and_is_not_mani_asking
     assert reply.text == f"{draft}\n\nHow long do you want to give him?"
     assert reply.asked == "How long do you want to give him?"
     assert sent("That sounds hard. What happened then? How did you feel?").text == "That sounds hard. How did you feel?"
+
+
+def test_wording_written_for_them_keeps_its_words_and_is_never_cut_short():
+    """The 2026-11-25 Directive run (TC-29): the text to the landlord came back with "broken" swapped for "hurt" and
+    cut after its first sentence by the Directive trim."""
+    draft = ('Here it is.\n\n"Hi [name], the heating has been broken for three weeks. I have asked twice. Please '
+             'arrange the repair this week. Can you confirm a date? Thanks, [you]"')
+    reply = sent(draft, directive=True)
+    assert reply.text == draft and reply.enforced == []
+    assert enforce.forbidden_in_own_words(draft) == []
+    assert enforce.forbidden_in_own_words("Broken nights add up.") == ["broken"]

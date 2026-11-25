@@ -181,11 +181,23 @@ def _swapped(match: re.Match) -> str:
     return f"{fitting.capitalize() if article[0].isupper() else fitting}{space}{plain}"
 
 
+def forbidden_in_own_words(text: str) -> list[str]:
+    """The forbidden words in Mani's own words: wording written for them to send is left out (see `in_plain_words`)."""
+    return [event.split(":", 1)[1] for event in in_plain_words(text)[1]]
+
+
 def in_plain_words(text: str) -> tuple[str, list[str]]:
     """The text with each forbidden word swapped for its plain word (an article before it kept fitting), and the
-    events: one per forbidden word it used."""
-    found = forbidden_words(text)
-    return _FORBIDDEN.sub(_swapped, text), [f"{FORBIDDEN_WORD}:{word}" for word in found]
+    events: one per forbidden word it used. Wording written for them to send is theirs and keeps its words (the
+    2026-11-25 run turned "the heating is broken" in a text to a landlord into "hurt")."""
+    out, found, at = [], set(), 0
+    for start, end in sorted(questions.drafted(text)) + [(len(text), len(text))]:
+        if start < at:
+            continue
+        found.update(forbidden_words(text[at:start]))
+        out += [_FORBIDDEN.sub(_swapped, text[at:start]), text[start:end]]
+        at = end
+    return "".join(out), [f"{FORBIDDEN_WORD}:{word}" for word in sorted(found)]
 
 
 def without_banned_lines(text: str, ask: str, *, guarded: bool) -> tuple[str, list[str]]:
@@ -251,7 +263,8 @@ def directive_trimmed(text: str, asked: str) -> tuple[str, list[str]]:
     and the event. It is cut only where it still reads whole: the cut ends on a full sentence, no list is broken, and
     the question does not lean on a sentence cut away. Otherwise it goes out as written, recorded as kept long."""
     sentences = questions.sentences(text)
-    if len(sentences) <= DIRECTIVE_SENTENCES:
+    if len(sentences) <= DIRECTIVE_SENTENCES or questions.drafted(text):
+        # Wording written for them to send is help, and is never cut short (TC-29, 2026-11-25).
         return text, []
     body, question = _split_question(text, asked)
     room = DIRECTIVE_SENTENCES - len(questions.sentences(question))

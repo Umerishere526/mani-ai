@@ -10,7 +10,7 @@ from evals.drive import Conversation
 from evals.reply_rules import genders_named, pronouns, questions
 from mani.chat import greeting
 from mani.chat.crisis import UNREAD_REPLIES
-from mani.chat.enforce import banned_phrases, forbidden_words, interpretive
+from mani.chat.enforce import banned_phrases, forbidden_in_own_words, interpretive
 from mani.chat.questions import drafted
 from mani.chat.decide import OFFER_FROM_MESSAGE
 
@@ -146,7 +146,7 @@ def no_repeated_opener(c: Conversation) -> Result:
 def no_forbidden_words(c: Conversation) -> Result:
     source = f"Behavioral Framework; {APPROVED}"
     for n, e in enumerate(c.exchanges, 1):
-        if found := forbidden_words(e.reply):
+        if found := forbidden_in_own_words(e.reply):
             return Result("no_forbidden_words", DETERMINISTIC, False, f"used {found}", n, source=source)
     return Result("no_forbidden_words", DETERMINISTIC, True, source=source)
 

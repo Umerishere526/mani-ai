@@ -182,8 +182,9 @@ async def judge(http, settings, case, got) -> dict:
 async def structured(http, settings, model: str, messages: list[dict], schema: type[BaseModel]) -> dict:
     """A call the evaluation makes for itself (the judge, the model-played person), straight to OpenRouter at effort
     low: never recorded as a chat call, and never on the chat's priority tier."""
-    # A set output budget keeps OpenRouter's hold for the call small; a verdict at effort low fits well inside it.
-    body = {"model": model, "reasoning": {"effort": "low"}, "max_tokens": 2000, "messages": messages,
+    # A set output budget keeps OpenRouter's hold for the call small; a ten-criterion verdict with its quotes runs past
+    # 2000 tokens (5 of 10 verdicts were cut off on 2026-11-25), so the budget is 8000.
+    body = {"model": model, "reasoning": {"effort": "low"}, "max_tokens": 8000, "messages": messages,
             "response_format": {"type": "json_schema", "json_schema": {
                 "name": schema.__name__.lower(), "strict": True, "schema": to_strict_json_schema(schema)}}}
     raw, _ = await post(http, settings, body)
