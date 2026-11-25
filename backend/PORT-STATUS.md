@@ -31,6 +31,9 @@ the same change as the work.**
   included (`chain.ALWAYS_REASONING_PREFIXES`). Without it, at effort high, 4 of 61 chat calls ran out of tokens while
   thinking and the turn failed (2026-10-07). Measured by the rebuild's evaluation on the real stack: MiniMax at `low`
   answered a turn in a median of 3.8 s for about $0.00045 (`evals/results/`, 2026-11-17).
+- A seed that changes a prompt keeps the row it replaces in `admin.prompt_versions` and moves the prompt's `version`
+  on, so which prompt was live when can be read back (`seed.seed_prompt`, `config_tables.SNAPSHOT_PROMPT`;
+  `tests/integration/test_seed_history.py`). Rows seeded before 2026-11-25 have no history.
 - Every turn's system prompt is `mani.md`, then the framework guide built from the registry, then what is known of the
   person (`facts.system_prompt`). The four chat prompts and the body check-in's script it replaced were deleted on
   2026-11-17; the seed switches their rows off (`seed.RETIRED_PROMPTS`).
