@@ -19,7 +19,7 @@ def framework(file_id: str) -> Framework:
     )})
 
 
-REGISTRY = Registry([framework("abcde"), framework("thought_reframe")])
+REGISTRY = Registry([framework("abcde"), framework("thought_reframe"), framework("structured_problem_solving")])
 
 
 def offered(framework_id: str = "abcde", phase: str = "offering") -> TechniqueState:

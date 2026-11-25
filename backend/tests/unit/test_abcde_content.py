@@ -3,10 +3,11 @@
 
 import pytest
 
+from evals.reply_rules import forbidden_words
 from mani.chat.facts import framework_guide
-from mani.chat.techniques import Registry
+from mani.chat.techniques import Registry, example_text, steps_text
 from mani.models.rows import Framework
-from scripts.seed import FRAMEWORKS_DIR, parse_framework
+from scripts.seed import FRAMEWORKS_DIR, missing_for_activation, parse_framework
 
 STYLES = ("directive", "supportive", "reflective")
 
@@ -23,8 +24,21 @@ def as_framework(parsed: dict) -> Framework:
     )
 
 
-def test_abcde_and_thought_reframe_are_the_frameworks_seeded():
-    assert sorted(p.stem for p in FRAMEWORKS_DIR.glob("*.md")) == ["abcde", "thought_reframe"]
+def test_abcde_thought_reframe_and_structured_problem_solving_are_the_frameworks_seeded():
+    seeded = sorted(p.stem for p in FRAMEWORKS_DIR.glob("*.md"))
+    assert seeded == ["abcde", "structured_problem_solving", "thought_reframe"]
+
+
+@pytest.mark.parametrize("path", sorted(FRAMEWORKS_DIR.glob("*.md")), ids=lambda p: p.stem)
+def test_every_seeded_framework_is_complete_and_free_of_the_forbidden_words(path):
+    """A framework moved back from paused/ must carry all a turn reads, and nothing the model reads from it (the guide,
+    the steps, the example) may use a word the client's Behavioral Framework forbids."""
+    parsed = parse_framework(path)
+    assert missing_for_activation(parsed) == []
+    framework = as_framework(parsed)
+    read = [framework_guide(Registry([framework])), example_text(framework),
+            *(steps_text(framework, style) for style in STYLES)]
+    assert forbidden_words("\n".join(read)) == []
 
 
 def test_abcde_runs_a_to_e(abcde):
@@ -60,8 +74,6 @@ STEPS = {
 
 def test_the_five_steps_are_the_clients_in_every_style(abcde):
     """The client's sequence document, 2026-11-18, minus the openers that answer only Not sure."""
-    from mani.chat.techniques import steps_text
-
     for style, text in STEPS.items():
         assert steps_text(as_framework(abcde), style) == text, style
 
