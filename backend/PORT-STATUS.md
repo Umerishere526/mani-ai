@@ -271,7 +271,7 @@ the same change as the work.**
 - **Directive replies are short and human: two or three short sentences in the chat and inside the set (where it
   says back no summary; what it understood goes into its question), at most one point and not every reply, a
   few of their own words to show it heard them, then it stays or asks the one question that moves them on (never a
-  pick-from-several), never going back over what was said, never saying sorry (it says back, in a few of their words, what they said and takes it one step on;
+  pick-from-several), never going back over what was said, never saying sorry (it takes what they said one step on, never repeating it back;
   muhammad, 2026-11-24, changed 2026-11-25 because "what they are really trying to say" had Directive state its
   readings as fact), being straight about options and next steps but never about what they feel or why, and A asks
   for one specific recent event** (muhammad,
@@ -343,7 +343,7 @@ the same change as the work.**
   050 before the deploy. Not yet measured live.
 - **Code takes out a short verdict line on what they feel or what is going on ("That's what hurts.", "…, that's what
   stings.", "Betrayed fits.", "That's the part that's hard to get past."), unless it is all the reply says, the turn
-  is guarded, or it is wording written for them to send; most Directive replies are a few of their words and one open
+  is guarded, or it is wording written for them to send; most Directive replies are a short line that adds something (never their sentence repeated back, changed the same day after the acceptance test parroted every reply) and one open
   question** (muhammad, 2026-11-25). Because his tester found such a line closing nearly every Directive reply, heard
   as an assumption, as flowery, and as a suggestion every time. `enforce.without_verdicts`, `_VERDICT`, trace
   `verdict_removed`; `test_enforce.py`.
