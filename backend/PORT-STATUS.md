@@ -615,6 +615,31 @@ the same change as the work.**
   `crisis.pause_reply`, `chat_pauses.paused_for` (migration 049), `paused_for` on a turn and an error, `chat_paused_for` on
   the profile and the opening; `test_the_pause_reply_leads_with_where_to_get_help_and_the_length_comes_after` in
   `test_crisis_resources.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **While danger about a person is held, every reply that does not pause names 911, 988 and findahelpline.com, added
+  by code when missing; a body symptom's line stays once per rise; notes never say "don't repeat" the numbers**
+  (muhammad, 2026-11-25, CR-3). Because manasa's crisis test stepped guidance down (2026-11-25) and a local TC-S2
+  reply named 988 and 911 but not the outside-US line. `worry.step`, `crisis.names_help` (requires `crisis.DIRECTORY`);
+  `test_crisis_resources.py`. PROVISIONAL: clinician sign-off required before deploy.
+- **Once suicidal thoughts are confirmed, Mani asks about immediate danger (alone, a plan or means, tonight) before
+  anything else until it is answered** (muhammad, 2026-11-25, CR-1). Because Mani went back to reflective questions in
+  manasa's crisis test (2026-11-25). Record key `worry_immediacy`, `Safety.immediacy_said`, `crisis.IMMEDIACY_QUESTION`.
+  PROVISIONAL: clinician sign-off required before deploy. Not yet eval-gated.
+- **Danger that paused the chat closes only on their word that they are safe or that someone is with them; the first
+  message back gets the immediacy question with the help line and never pauses; a second pause needs danger said
+  again** (muhammad, 2026-11-25, CR-5). Because a quiet first message back cleared unresolved danger (manasa,
+  2026-11-25, R190). Record key `worry_paused`, `crisis.return_check_reply`; `test_worry.py`, `test_turn.py`.
+  PROVISIONAL: clinician sign-off required before deploy.
+- **Turns held for safety ask the model at reasoning effort "low"; the first danger message out of a clear conversation
+  stays at the prompt row's effort** (muhammad, 2026-11-25, CR-4). Because crisis replies were slow (manasa,
+  2026-11-25, R189). `worry.HELD_REASONING_EFFORT`. Must be measured with the safety eval cases and the recall set
+  before deploy. PROVISIONAL: clinician sign-off required before deploy.
+- **While a worry is open Mani never validates a reason to stay alone or avoid help, and never guesses how others
+  would react** (muhammad, 2026-11-25, CR-2). Because manasa's crisis test (2026-11-25, R187). `mani.md` Safety.
+  PROVISIONAL. Not yet eval-gated.
+- **Presence and burden lines ("I'm not going anywhere", "heavier than I can hold" and four more) are cut by code on
+  every turn, crisis turns included, unless the sentence also names where to get help** (muhammad, 2026-11-25, CR-6).
+  Because manasa saw them in crisis replies (2026-11-25, R191). `enforce.BANNED_PHRASES`, `enforce.without_banned_lines`;
+  `test_enforce.py`. PROVISIONAL: clinician sign-off required before deploy.
 - **An edit never lowers danger already reached; a rewritten danger message counts as continuation** (muhammad,
   2026-11-25, provisional S8). Because an edit could undo a crisis. `rewind.held`. PROVISIONAL: clinician sign-off required before deploy.
 - **Every help text and every refusal while a worry is held names 911, 988 and "Outside the US: findahelpline.com";
@@ -825,7 +850,7 @@ the same change as the work.**
   concern (`worry.CALM_TO_CLEAR`, record key `worry_calm`; an answer to a question Mani asked directly, the return
   check or the one after a set, still settles at once), because one calm message can be a changed subject and a
   worry nobody closes held every later turn; a first message back read as danger gets `crisis.RETURN_DANGER_REPLY`
-  in place of the question; the pausing turn sends Mani's own reply and then the pause line; a retry of a message
+  in place of the question; the pausing turn sends only code's pause words, help first (CR-7, 2026-11-25: the model writes before code decides to pause, so its reply offered to talk about work and then paused, TC-S3; PROVISIONAL); a retry of a message
   answered with the fixed words of a failed call runs the turn again from the state before it
   (`crisis.UNREAD_REPLIES`, `turn._arrival`); a copy of Mani's reply with words of theirs added is read like any
   message (`text.COPY_ADDED_WORDS`). The prompt lines that go with these have not been through the evaluation.
