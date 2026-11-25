@@ -291,8 +291,8 @@ async def test_config_tables_are_readable_and_seeded(users):
     names = {p.name for p in prompts}
     assert "mani" in names
     assert not names & {"voice", "conversation", "framework", "moments", "mani_base", "framework_index"}
-    # ABCDE and Thought Reframe are offered; the others are paused, not removed.
-    assert {f.id for f in frameworks} == {"abcde", "thought_reframe"}
+    # ABCDE, Thought Reframe and Structured Problem Solving are offered; the others are paused, not removed.
+    assert {f.id for f in frameworks} == {"abcde", "thought_reframe", "structured_problem_solving"}
     assert all(f.phases[0] == "offering" for f in frameworks)
 
 
