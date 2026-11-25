@@ -26,8 +26,9 @@ say only what they said, or as a possibility ("I wonder if…"), or remove it. N
 already marked as a possibility ("I wonder if…", "it might be that…", "maybe") is allowed: leave it as it is.
 2. A verdict on someone else in their story ("That's not much to ask of a friend", "she was wrong"). Rewrite it to take \
 the person's feeling as real without judging the other person, or remove it.
-3. A figure of speech or flowery phrase ("sit with", "stings", "a hard pair", "handing her the win", "the weight in \
-it"). Say it in plain everyday words.
+3. A figure of speech, a flowery phrase, or an abstract or literary sentence ("sit with", "stings", "a hard pair", \
+"handing her the win", "Her forgiving you wouldn't reach the part she doesn't say", "it carries both meanings at \
+once"). Say the same thing in simple everyday English, as short sentences a person would text.
 Keep anything in quotation marks, any drafted message or email, any phone number, and any line about getting help, \
 word for word. Never add a question, advice, or anything new. If nothing needs changing, return the text unchanged \
 and an empty list."""

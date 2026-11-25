@@ -323,6 +323,13 @@ the same change as the work.**
   his tester's friend-conflict chat (6.5/10) ran ABCDE on "I looked stupid" instead of the offered belief, asked C
   twice after "I told you" and "you know", said "That's not much to ask of a friend", and left the dilemma of reaching
   out first untouched. `mani.md` ("How you listen", "Inside the set of questions"). Not yet eval-gated.
+- **Simple English in every style; before any question Mani checks the whole chat and asks only what is still
+  unknown; a stage the chat already answered is said back in a sentence and only what is missing is asked; "didn't we
+  already cover that?" is agreed with and used** (muhammad, 2026-11-25). Because his tester's Reflective fiancé chat
+  (7.5/10) used literary sentences ("Her forgiving you wouldn't reach the part she doesn't say"), asked again what
+  going would say about them as a partner, and asked B from scratch after the belief was stated, which the stage rule's
+  own example told it to do. The reply check also rewrites abstract or literary sentences. `mani.md`,
+  `check.INSTRUCTIONS`; regression TC-41. Not yet eval-gated.
 - **A reading may be said in `text` once, plainly marked as a possibility ("I wonder if…", "It might be that…"), or put
   in the question; never as a statement of how things are. Notes keep every feeling and want they named and how they
   connect; layered and conflicting feelings are explored one possibility at a time; no false optimism or stock
