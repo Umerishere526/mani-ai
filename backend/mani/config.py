@@ -191,10 +191,9 @@ class Settings(BaseSettings):
     # Seconds the chat stays paused once someone in danger continues with nothing in place.
     crisis_pause_seconds: int = Field(default=30, ge=1)
 
-    # Paid replies one person may get in 24 hours. 0 turns it off. muhammad's number is 300,
-    # off for now so testing is not capped; set it before real traffic. Only turns that call
-    # the model count, and the safety screen runs before it - a crisis is always answered.
-    daily_message_limit: int = Field(default=0, ge=0)
+    # Paid replies one person may get in 24 hours (muhammad's number). 0 turns it off. Only turns that call the
+    # model count, and it never applies while a safety worry is open or a return check is owed.
+    daily_message_limit: int = Field(default=300, ge=0)
     # Paid replies one person may get in a minute, counted the same way. 0 turns it off.
     minute_message_limit: int = Field(default=10, ge=0)
 

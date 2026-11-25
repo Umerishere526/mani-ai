@@ -34,6 +34,7 @@ def test_defaults_are_the_safe_choice():
     assert settings.crisis_pause_seconds == 30
     assert settings.ai_debug_mode is False
     assert settings.openrouter_data_collection == "deny"
+    assert settings.daily_message_limit == 300, "spend per account is capped unless turned off on purpose"
 
 
 @pytest.mark.parametrize("missing", sorted(REQUIRED))
