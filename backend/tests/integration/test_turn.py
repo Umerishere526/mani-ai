@@ -312,7 +312,7 @@ async def test_a_declined_framework_is_never_offered_again(alice, model):
     await send(alice, thread.id, "i feel like a pushover")
     await send(alice, thread.id, "no, i don't want to do any exercise")
     turn = await send(alice, thread.id, "still feel like a pushover")
-    assert offers_in(scripted.schemas[-1]) == ["thought_reframe", "structured_problem_solving"]
+    assert offers_in(scripted.schemas[-1]) == ["thought_reframe"]
     assert turn.prompts == [] and turn.trace["refused"] == "offer"
 
 
@@ -705,7 +705,7 @@ async def test_an_offer_on_the_persons_second_message_is_refused_and_the_next_ma
     assert second.content == "Nobody asks. How could you test that thought?"
     assert await technique_of(alice, thread.id) is None
     third = await send(alice, thread.id, "i don't think they'd help")
-    assert offers_in(scripted.schemas[-1]) == ["abcde", "thought_reframe", "structured_problem_solving"]
+    assert offers_in(scripted.schemas[-1]) == ["abcde", "thought_reframe"]
     assert '[belief] "How could you test that thought?"' in facts_of(scripted)
     assert [p.label for p in third.prompts] == ["Not sure", "Show me how", "Give me a tool"]
 

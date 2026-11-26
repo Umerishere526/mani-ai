@@ -79,10 +79,10 @@ the same change as the work.**
      reply (`turn.follow_up_due`).
   When no host answers, a fixed reply goes out instead (`crisis.TROUBLE_REPLY`, or `crisis.CRISIS_REPLY` while a
   worry is open) and nothing else changes.
-- **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): ABCDE, Thought Reframe and Structured
-  Problem Solving are seeded and offered (the client's ABCDE document of 2026-10-09; Thought Reframe moved out of
-  `paused/` by muhammad, 2026-10-21; Structured Problem Solving for practical problems, 2026-11-25). The other three
-  are kept in `content/frameworks/paused/`; the seed sets their rows inactive (never deleted, since
+- **Frameworks** (`content/frameworks/*.md`, seeded to `admin.frameworks`): ABCDE and Thought Reframe are seeded and
+  offered (the client's ABCDE document of 2026-10-09; Thought Reframe moved out of `paused/` by muhammad, 2026-10-21).
+  The other four (Structured Problem Solving paused again by muhammad, 2026-11-25) are kept in
+  `content/frameworks/paused/`; the seed sets their rows inactive (never deleted, since
   threads and exercises refer to them), and moving a file back up brings it back once it has what the turn reads
   (`seed.missing_for_activation`). After a framework's last stage come the closing choices Continue chatting and Visit
   library. The body check-in (the client's "SOMATIC SECTION OF MANI", paused since 2026-11-05) was
@@ -300,8 +300,8 @@ the same change as the work.**
 - **A practical problem is understood before options: what they want, what can't change, and, when several causes
   could explain it, where it goes wrong, asked in one plain question; no step with big consequences (replacing
   someone, ending a job or relationship, money) before the cause is known; once known and they have said what they
-  want to change, the set that fits is offered (Structured Problem Solving for a practical problem) before any options
-  of Mani's own; options with a reason and their cost come directly only when they ask for an answer now, decline or
+  want to change, the set that fits is offered before any options of Mani's own (while Structured Problem Solving is
+  paused, no set fits a purely practical problem, so it gets options directly); options with a reason and their cost come directly only when they ask for an answer now, decline or
   finish the set, or no set fits; an explicit request (what to do, what to say, a tool, help choosing) is answered in
   that reply** (muhammad, 2026-11-25; the set before options the same day, because a tester found Mani "too solution
   oriented" with "no framework coming", and the paid run's TC-10 offered none). Because the tester's business-owner chat got "it's him… hand the
@@ -1292,12 +1292,13 @@ the same change as the work.**
 - **Retired 2026-11-17: a framework walk never skips and helps when they don't know** (muhammad, 2026-10-21).
   Because the walk is gone; `mani.md` holds both (every stage in order, a gentle reading when they don't know),
   and only `action: stop` ends a set (2026-11-17).
-- **ABCDE is offered from the client's ABCDE document; Structured Problem Solving is active for practical problems;
-  ACT, Behavioral Activation and DBT STOP stay paused** (muhammad, 2026-10-09; Thought Reframe joined it 2026-10-21;
-  Structured Problem Solving, 2026-11-25). Because the client's ABCDE document of 2026-10-09 is what we build to, and
+- **ABCDE and Thought Reframe are offered; Structured Problem Solving, ACT, Behavioral Activation and DBT STOP are
+  paused** (muhammad, 2026-10-09; Thought Reframe joined it 2026-10-21; Structured Problem Solving activated and paused
+  again by muhammad the same day, 2026-11-25, so the release changes no framework behaviour from main; a practical
+  problem gets options directly, and TC-10 is reported as a gap). Because the client's ABCDE document of 2026-10-09 is what we build to, and
   ABCDE's stages give the questions a target (2026-10-09); R122 and Lolly's practical help (11/20) need a set for the
   practical problem itself (provisional P6; Not yet eval-gated); why the other three are paused: reason unknown,
-  muhammad to confirm. `content/frameworks/structured_problem_solving.md`. Each stage opens with its
+  muhammad to confirm. `content/frameworks/paused/structured_problem_solving.md`. Each stage opens with its
   letter and name ("A is for Activating Event."), as the document shows (muhammad agreed 2026-10-13, R12), and
   nothing but a short acknowledgment in Directive comes before it. The five steps are the client's sequence
   document's list in the person's style with its ready question, word for word (`stages.offering.explain`). Of each stage the turn reads its line (`intro`), `purpose` and `ready_when`; the

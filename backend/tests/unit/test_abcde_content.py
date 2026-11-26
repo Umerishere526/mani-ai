@@ -24,9 +24,9 @@ def as_framework(parsed: dict) -> Framework:
     )
 
 
-def test_abcde_thought_reframe_and_structured_problem_solving_are_the_frameworks_seeded():
+def test_abcde_and_thought_reframe_are_the_frameworks_seeded():
     seeded = sorted(p.stem for p in FRAMEWORKS_DIR.glob("*.md"))
-    assert seeded == ["abcde", "structured_problem_solving", "thought_reframe"]
+    assert seeded == ["abcde", "thought_reframe"]
 
 
 @pytest.mark.parametrize("path", sorted(FRAMEWORKS_DIR.glob("*.md")), ids=lambda p: p.stem)

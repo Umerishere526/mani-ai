@@ -171,7 +171,7 @@ def test_no_offer_is_allowed_before_their_third_message():
     assert "You cannot offer" not in facts_for(ctx(), person_messages=3)
 
 
-ALL_SETS = ["abcde", "thought_reframe", "structured_problem_solving"]
+ALL_SETS = ["abcde", "thought_reframe"]
 
 
 def offerable_for(**given) -> tuple[str, ...]:
@@ -180,8 +180,8 @@ def offerable_for(**given) -> tuple[str, ...]:
 
 
 def test_the_sets_a_reply_may_offer_are_the_active_ones_not_declined():
-    assert offerable_for() == ("abcde", "thought_reframe", "structured_problem_solving")
-    assert offerable_for(record={"declined": ["abcde"]}) == ("thought_reframe", "structured_problem_solving")
+    assert offerable_for() == ("abcde", "thought_reframe")
+    assert offerable_for(record={"declined": ["abcde"]}) == ("thought_reframe",)
 
 
 def test_nothing_may_be_offered_when_code_would_refuse_it_and_the_facts_say_so():
