@@ -31,10 +31,6 @@ st.set_page_config(page_title="Mani chat tester", page_icon="🧠", layout="wide
 # style the conversation is in.
 STYLES = {"directive": "Directive", "supportive": "Supportive", "reflective": "Reflective"}
 
-# Under the greeting, so every conversation opens saying what Mani is (S15; Safety Guardrails §8). The apps show it on
-# the style screen. Wording pending legal review.
-AI_DISCLOSURE = "I'm MANI, an AI companion, not a therapist."
-
 # Shown as a popup when there is nothing to send or nothing changed; the backend words its own refusals the same way.
 EMPTY_NOTICE = "Write a message first. It can't be empty or only spaces."
 UNCHANGED_NOTICE = "Nothing has changed yet. Change your message and press Send, or press Cancel to keep it."
@@ -222,7 +218,7 @@ thread_id = (thread or {}).get("id")
 
 st.title("🧠 Mani chat tester")
 if paused is not None and crisis_pause.dismissed(paused):
-    crisis_pause.banner(client, paused)
+    crisis_pause.banner(paused)
 if developer:
     st.caption(f"user: {st.session_state.email}  ·  thread: {thread_id[:8] + '…' if thread_id else 'not started'}")
 
@@ -371,8 +367,6 @@ for index, message in enumerate(messages):
                 render_editor(message["content"])
             else:
                 st.write(message["content"])
-                if index == 0 and opening:
-                    st.caption(AI_DISCLOSURE)
                 if index >= opening:
                     # Copy and edit side by side on one row, as under a message in ChatGPT.
                     with st.container(horizontal=True, gap="small", vertical_alignment="center", key=f"actions_{index}"):

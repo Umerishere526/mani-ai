@@ -12,7 +12,7 @@ endpoint (a conversation's first message through `POST /v1/threads`, which creat
 ## What it simulates versus what is real
 
 - **Real:** every chat turn, every capsule tap, style selection (tapping one of the greeting's
-  three style buttons), framework offers (the lead-in, the five steps and Start), the feelings check after the last stage, the crisis pause (a centred pop-up that leads with where to get help - 988 to call or text, 911, findahelpline.com outside the US, Get help now and Visit library, with 911 first when the danger is to someone else, from someone or in the body, and "Call 911 now." first after an overdose - and only beneath it, smaller, that the chat is paused, for how long and about how many minutes are left; no ticking clock; closing it keeps the help lines above the readable conversation, and the Library stays open). All of it
+  three style buttons), framework offers (the lead-in, the five steps and Start), the feelings check after the last stage, the crisis pause (the client's centred "Chat is temporary unavailable" pop-up with how long the pause runs, 988 and 911, Get help now and Go to library, and a live countdown at the bottom; the Library stays open). All of it
   goes over HTTP to the actual FastAPI app - nothing here calls the chat code directly.
 - **Real, too:** the library page (sidebar **Library**, or any **Visit library** button). Its front
   page lists the client's topics with their blurbs (`GET /v1/exercises/topics`); a topic shows its
@@ -108,8 +108,8 @@ catcher (`[local_smtp]`, http://127.0.0.1:54344), and the nickname is then set f
 signed in - the session is remembered for seven days. The sidebar's **Nickname** field changes
 the name the greeting uses, from the next new conversation. Every message has a copy icon under it,
 in the chat and in the admin viewer. **Sign out** switches
-accounts, and **New conversation** shows a fresh opening for the signed-in user: Mani's greeting, with "I'm MANI, an AI
-companion, not a therapist." under it, and the three style buttons. Nothing is stored until the first message sent, which creates the conversation (with the style
+accounts, and **New conversation** shows a fresh opening for the signed-in user: Mani's greeting and the three
+style buttons. Nothing is stored until the first message sent, which creates the conversation (with the style
 tapped, if any), so an opening nobody wrote in never appears in the list, and a reload opens the latest conversation
 instead of it. Under it,
 **Conversations** lists that user's threads, most recently active first (the latest 20, titled once a
