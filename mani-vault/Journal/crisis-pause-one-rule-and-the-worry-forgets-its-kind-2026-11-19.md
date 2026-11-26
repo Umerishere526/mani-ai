@@ -8,6 +8,7 @@ failed:
   - "Tried patching each gap in the pause on its own; failed because a settled body worry's kind blocking a later pause is the same fault as the question's kind (two record keys, one rebuilt each turn, one never), the fifth fix in the area"
   - "Tried honouring checked_at in the conversation a pause began in, on its own; failed because that conversation stays at danger, so its next message would pause with no word from Mani"
 ---
+> Superseded 2026-11-25 — see [[return-check-only-in-the-paused-conversation-2026-11-25]] (the settling by `checked_at` across conversations, and changes 2 and 3 for new conversations)
 2026-11-19
 
 # One rule for a conversation's safety, and a worry forgets its kind when it settles

@@ -32,11 +32,6 @@ def steps_text(framework: Framework, style: str) -> str:
     return ((framework.stages.get(OFFERING) or {}).get("explain") or {}).get(style) or framework.summary
 
 
-def example_text(framework: Framework) -> str:
-    """The worked example shown when they tap I need an example."""
-    return (framework.stages.get(OFFERING) or {}).get("example") or framework.summary
-
-
 class Registry:
     """The active frameworks, keyed by id.
 

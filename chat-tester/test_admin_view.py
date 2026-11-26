@@ -115,17 +115,6 @@ def test_the_gap_between_messages_reads_at_a_glance(seconds, shown):
     assert gap(seconds) == shown
 
 
-def test_an_admin_accounts_password_is_never_reset(monkeypatch):
-    monkeypatch.setattr(mani, "_require_keys", lambda: None)
-    monkeypatch.setattr(
-        mani, "_account_for", lambda email: {"id": "a", "app_metadata": {"admin_role": "admin"}}
-    )
-    monkeypatch.setattr(mani.requests, "put", lambda *a, **k: pytest.fail("reset an admin's password"))
-
-    with pytest.raises(RuntimeError, match="cannot be reset here"):
-        mani.reset_password("admin@test.dev", "newpass1")
-
-
 def test_an_admin_reviews_who_rated_which_exercise_and_filters_by_email():
     app = _app(ADMIN)
     app.sidebar.radio(key="admin_screen").set_value("Library feedback").run()

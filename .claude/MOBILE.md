@@ -15,9 +15,21 @@ cd mobile
 npx expo start           # dev server; press i / a to open a simulator
 npm run ios              # or: npm run android, npm run web
 npm run lint             # expo lint
+npm test                 # jest
+npx tsc --noEmit         # type check
 ```
 
-`npm run reset-project` is listed in `package.json` but **broken** — it runs `node ./scripts/reset-project.js` and `scripts/` does not exist. Either delete the script entry or restore the file; don't just run it and wonder why it fails.
+## Backend and auth
+
+The app talks to the FastAPI backend through `@/lib/api` (`src/lib/api/`: the client, then one module per area: threads, profile, exercises, crisis, account), never to an external API directly. Auth is GoTrue over REST (`src/lib/auth/gotrue.ts`, `session-manager.ts`). Public environment variables, read at build time, in `mobile/.env` for development:
+
+- `EXPO_PUBLIC_API_URL` — the FastAPI backend's base URL.
+- `EXPO_PUBLIC_SUPABASE_URL` and `EXPO_PUBLIC_SUPABASE_ANON_KEY` — the project's Auth, with the publishable key only.
+
+Installs pending muhammad's approval (none were added during the fix wave of 2026-11-25):
+
+- `expo-secure-store` — the session is kept in AsyncStorage until it is installed; move it there then (PORT-STATUS, "Mobile auth talks to GoTrue over REST").
+- `expo-audio` — the exercise player runs a timer with no audio until it is installed; the API already sends each recorded exercise's signed `audio_url`.
 
 ## Layout
 

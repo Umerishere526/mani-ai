@@ -9,6 +9,7 @@ failed:
   - "Tried fixing the missing danger direction per reported path; failed because two more turn kinds still lacked it"
   - "Tried keying the end check on crisis_detected; failed because a phrase judged only unsure sets it too"
 ---
+> Superseded 2026-11-25 — see [[return-check-only-in-the-paused-conversation-2026-11-25]] (a new conversation's return check)
 > Superseded 2026-11-13 — see [[crisis-pause-fires-on-refusal-2026-11-13]] (the turn loading only its own pause first, and a doubt in a chest chat pausing)
 
 # The crisis pause, and what the audit before it found (2026-11-13)

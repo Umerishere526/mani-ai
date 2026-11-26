@@ -38,8 +38,6 @@ export function PromptBasicFields({ register, errors, mode }: PromptBasicFieldsP
         <p className={FORM_HELPER_CLASSES}>{STRINGS.nameHelper}</p>
       </div>
 
-      <input type="hidden" {...register("type")} value="system" />
-
       <div>
         <label htmlFor="description" className={FORM_LABEL_CLASSES}>
           {STRINGS.descriptionLabel}

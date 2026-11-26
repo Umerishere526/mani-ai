@@ -4,6 +4,7 @@
 import datetime as dt
 import time
 import uuid
+from decimal import Decimal
 
 import asyncpg
 import pytest
@@ -327,17 +328,16 @@ async def test_a_model_call_is_recorded_with_its_cost(users):
         call_id = await llm_calls.record(
             conn, purpose=llm_calls.Purpose.CHAT, model="google/gemini-3-flash-preview",
             outcome=llm_calls.Outcome.OK, latency_ms=4200, user_id=ALICE,
-            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385, reasoning_tokens=300),
+            usage=llm_calls.Usage(input_tokens=8230, output_tokens=385, reasoning_tokens=300, cost_usd=0.00184215),
             generation_id="gen-1760400000-abc")
-        spend = await llm_calls.spend_since(conn, ALICE)
-        thinking, generation = await conn.fetchrow(
-            "select reasoning_tokens, generation_id from admin.llm_calls where id = $1", call_id
+        row = await conn.fetchrow(
+            "select input_tokens, reasoning_tokens, cost_usd, generation_id from admin.llm_calls where id = $1",
+            call_id,
         )
 
-    assert spend["input_tokens"] == 8230
-    assert spend["calls"] == 1
-    assert thinking == 300
-    assert generation == "gen-1760400000-abc"
+    assert (row["input_tokens"], row["reasoning_tokens"]) == (8230, 300)
+    assert row["cost_usd"] == Decimal("0.00184215"), "the billed cost is kept to the digit OpenRouter sent"
+    assert row["generation_id"] == "gen-1760400000-abc"
 
 
 async def test_threads_needing_summary_lists_across_users(users):

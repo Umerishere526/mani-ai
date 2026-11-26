@@ -4,6 +4,7 @@
 from __future__ import annotations
 
 import logging
+import time
 import uuid
 from collections.abc import Awaitable, Callable
 from dataclasses import dataclass, field, replace
@@ -12,8 +13,10 @@ from typing import Any
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import rewind, turn as chat_turn
+from mani.chat import check, rewind, turn as chat_turn
 from mani.chat.greeting import style_label
+from mani.chat.reply import TurnReply
+from mani.config import get_settings
 from mani.db import pool, threads
 from mani.db import messages as messages_db
 from mani.errors import ErrorCategory, ServiceError
@@ -93,6 +96,15 @@ async def thread_version(conn: asyncpg.Connection, thread_id: uuid.UUID | str) -
     return (row["message_count"], row["newest"]) if row else (None, None)
 
 
+def _ms_since(began: float) -> int:
+    return int((time.perf_counter() - began) * 1000)
+
+
+def _timed(turn: chat_turn.Turn, **timings: int) -> chat_turn.Turn:
+    """The turn with its stage timings added to the trace it already carries; a turn with no trace records none."""
+    return replace(turn, trace={**turn.trace, **timings}) if turn.trace else turn
+
+
 async def run(
     claims: Claims, thread_id: uuid.UUID | str, steps: Steps, *, answer_failure: bool,
 ) -> chat_turn.Turn:
@@ -103,12 +115,19 @@ async def run(
     called holding nothing. Write: the steps run again in a fresh transaction under the thread's lock, and
     are answered with that reply when the thread is unchanged; otherwise the turn is refused as a conflict.
     `answer_failure`: when no host answers, the write still runs and the turn sends its fixed words; otherwise the
-    failure is raised and nothing is written."""
+    failure is raised and nothing is written.
+    The trace gets each pass's milliseconds, connection wait included, and `total_ms` from the read's start to the
+    write's commit."""
+    began = time.perf_counter()
     try:
         async with pool.as_user(claims) as conn:
-            return await steps(conn, Model(conn, thread_id))
+            turn = await steps(conn, Model(conn, thread_id))
     except _ModelNeeded as needed:
         request = needed.request
+    else:
+        took = _ms_since(began)
+        return _timed(turn, read_ms=took, total_ms=took)
+    read_ms = _ms_since(began)
     try:
         call = await client.complete(request.messages, request.schema, **request.kwargs)
     except ServiceError:
@@ -116,8 +135,15 @@ async def run(
             raise
         logger.exception("model failed for thread %s; the turn sends its fixed words", thread_id)
         call = None
+    if call is not None and isinstance(call.value, TurnReply):
+        theirs = [m["content"] for m in request.messages if m.get("role") == "user"]
+        call, changed = await check.checked(call, said=theirs[-1] if theirs else "", everything="\n".join(theirs),
+                                            kwargs=request.kwargs, settings=get_settings())
+        call = replace(call, checked=tuple(changed))
+    writing = time.perf_counter()
     async with pool.as_user(claims) as conn:
-        return await steps(conn, Model(conn, thread_id, request=request, call=call))
+        turn = await steps(conn, Model(conn, thread_id, request=request, call=call))
+    return _timed(turn, read_ms=read_ms, write_ms=_ms_since(writing), total_ms=_ms_since(began))
 
 
 async def send(

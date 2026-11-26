@@ -1,6 +1,5 @@
 // ABOUTME: The Home screen's scrollable body — hero sphere/greeting, a list of featured
-// ABOUTME: exercise cards, and a link into the full library. No network layer yet, so the
-// ABOUTME: exercise list is a `homeExercises` prop rather than a live query.
+// ABOUTME: exercise cards, and a link into the full library; the route loads the exercises.
 
 import { ActivityIndicator, Pressable, ScrollView, View } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';
@@ -74,7 +73,7 @@ export function HomeScreenContent({
           accessibilityHint={en.home.libraryLinkHint}
         >
           <View className="flex-row items-center gap-1">
-            <Text className="font-sans-medium text-base">{en.home.libraryLink}</Text>
+            <Text className="shrink text-center font-sans-medium text-base">{en.home.libraryLink}</Text>
             <Feather name="chevron-right" size={18} color={colors.secondary[500]} />
           </View>
         </Pressable>

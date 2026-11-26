@@ -2,6 +2,7 @@
 # ABOUTME: The error contract is what every frontend branches on, so it is asserted here.
 
 import logging
+import warnings
 
 import pytest
 from fastapi import FastAPI
@@ -141,6 +142,28 @@ def test_internal_message_is_not_sent_to_the_client(client):
     assert "secret" not in response.text
 
 
+def test_an_unanticipated_fault_gets_the_same_error_shape_and_is_logged(caplog):
+    """Starlette's default is a plain-text 500, which a client branching on error.category cannot read.
+    The exception's own text could be anything, so it reaches neither the client nor the log line."""
+    client = TestClient(create_app(), raise_server_exceptions=False)
+    app: FastAPI = client.app
+
+    @app.get("/fault")
+    def fault():
+        raise KeyError("i-had-a-hard-day")
+
+    with caplog.at_level(logging.ERROR):
+        response = client.get("/fault")
+
+    assert response.status_code == 500
+    assert response.json() == {
+        "error": {"category": "unknown", "message": "Something went wrong. Please try again.", "retryable": False}
+    }
+    [record] = [r for r in caplog.records if r.name == "main"]
+    assert record.getMessage() == "unhandled KeyError"
+    assert record.exc_info[0] is KeyError, "the traceback is what an incident is diagnosed from"
+
+
 def test_an_empty_or_too_long_message_is_told_what_to_do(client):
     """A person who sends nothing, or too much, is told how to fix it rather than 'not valid'."""
     from mani.models.api import SendMessageIn
@@ -173,3 +196,17 @@ def test_an_error_report_carries_no_request_body_and_no_local_variables(monkeypa
     assert seen["send_default_pii"] is False
     assert seen["include_local_variables"] is False
     assert seen["max_request_body_size"] == "never"
+
+
+def test_the_warning_that_quotes_every_chat_reply_is_kept_out_of_the_log():
+    """langchain-openai's structured stream makes pydantic warn on every chat reply, quoting the reply itself. The app
+    silences that one warning when it starts, and only that one."""
+    quoting = ("Pydantic serializer warnings:\n  PydanticSerializationUnexpectedValue(Expected `none` - serialized "
+               "value may not be as expected [field_name='parsed', input_value=Said(text='I told my sister'), "
+               "input_type=Said])")
+    with warnings.catch_warnings():
+        warnings.simplefilter("error")
+        create_app()
+        warnings.warn(quoting, UserWarning)
+        with pytest.raises(UserWarning):
+            warnings.warn("any other warning", UserWarning)

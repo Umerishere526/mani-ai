@@ -1,50 +1,84 @@
+// ABOUTME: Chat screen route: a new conversation's style picker, then the conversation, its composer and
+// ABOUTME: the suggested-reply buttons; the safety pause blocks sending in every thread.
+
 import { useEffect, useRef, useState } from "react";
-import { Image, KeyboardAvoidingView, Platform, StatusBar, View } from "react-native";
+import { KeyboardAvoidingView, Platform, StatusBar, View } from "react-native";
 import { useLocalSearchParams, router } from "expo-router";
-import { AppHeader } from "@/components/shared";
-import { ChatConversation, ConversationStylePicker, type ChatInputBarRef } from "@/components/chat";
-import { useChatSimulation } from "@/hooks/useChatSimulation";
-import { useDrawer } from "@/providers";
+import { AppHeader, NoiseOverlay } from "@/components/shared";
+import { ChatConversation, ChatOpening, LoadFailed, type ChatInputBarRef } from "@/components/chat";
+import { useChat } from "@/hooks/useChat";
+import { useChatSafety } from "@/providers";
+import { promptAction } from "@/lib/chat";
 import type { SmartPrompt } from "@/types/chat";
 
 export default function ChatScreen() {
   const params = useLocalSearchParams<{ threadId?: string; requestNewThread?: string }>();
-  const { openCrisisDrawer } = useDrawer();
+  const safety = useChatSafety();
   const chatInputRef = useRef<ChatInputBarRef>(null);
   const [inputValue, setInputValue] = useState("");
-  const {
-    messages,
-    isWaitingForReply,
-    crisisDetected,
-    conversationStyle,
-    selectConversationStyle,
-    sendMessage,
-    startNewThread,
-  } = useChatSimulation(params.threadId);
+  // The pause is account-wide: a new chat or another thread starts paused too.
+  const paused = safety.pause !== null;
+  const chat = useChat(params.threadId, { onTurn: safety.noteTurn, onSendError: safety.noteSendError });
+  const isWaitingForReply = chat.state.sending !== null;
 
   useEffect(() => {
     if (params.requestNewThread === "true") {
-      startNewThread();
+      chat.startNewThread();
       router.setParams({ requestNewThread: undefined });
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [params.requestNewThread]);
 
   const handleSend = () => {
-    if (!inputValue.trim() || isWaitingForReply || crisisDetected) return;
-    sendMessage(inputValue);
+    if (!inputValue.trim() || isWaitingForReply || paused) return;
+    chat.send(inputValue);
     setInputValue("");
   };
 
   const handlePromptPress = (prompt: SmartPrompt) => {
-    if (crisisDetected) return;
-    sendMessage(prompt.label);
+    const action = promptAction(prompt);
+    if (action.kind === "library") {
+      router.push(action.section ? `/exercises/${action.section}` : "/exercises");
+      return;
+    }
+    if (paused || isWaitingForReply) return;
+    chat.send(action.text);
   };
 
   const handleNewChat = () => {
-    startNewThread();
+    chat.startNewThread();
     setInputValue("");
     chatInputRef.current?.focus();
+  };
+
+  const renderBody = () => {
+    if (!chat.started) {
+      return (
+        <ChatOpening
+          opening={chat.opening}
+          defaultStyle={chat.defaultStyle}
+          failed={chat.loadFailed}
+          onRetry={chat.reload}
+          onSelect={chat.chooseStyle}
+        />
+      );
+    }
+    if (chat.loadFailed) return <LoadFailed onRetry={chat.reload} />;
+    return (
+      <ChatConversation
+        messages={chat.state.messages}
+        isWaitingForReply={isWaitingForReply}
+        failed={chat.state.failed}
+        paused={paused}
+        inputValue={inputValue}
+        onChangeInput={setInputValue}
+        onSend={handleSend}
+        onPromptPress={handlePromptPress}
+        onPausedPress={safety.openScreen}
+        onRetry={chat.retry}
+        chatInputRef={chatInputRef}
+      />
+    );
   };
 
   return (
@@ -52,25 +86,9 @@ export default function ChatScreen() {
       <StatusBar barStyle="light-content" />
       <KeyboardAvoidingView className="flex-1" behavior={Platform.OS === "ios" ? "padding" : "height"}>
         <AppHeader onNewChatPress={handleNewChat} />
-        {conversationStyle === null ? (
-          <ConversationStylePicker onSelect={selectConversationStyle} />
-        ) : (
-          <ChatConversation
-            messages={messages}
-            isWaitingForReply={isWaitingForReply}
-            crisisDetected={crisisDetected}
-            inputValue={inputValue}
-            onChangeInput={setInputValue}
-            onSend={handleSend}
-            onPromptPress={handlePromptPress}
-            onCrisisPress={openCrisisDrawer}
-            chatInputRef={chatInputRef}
-          />
-        )}
+        {renderBody()}
       </KeyboardAvoidingView>
-      <View className="absolute inset-0 opacity-50" pointerEvents="none">
-        <Image source={require("@/assets/images/noise.png")} className="h-full w-full" resizeMode="repeat" />
-      </View>
+      <NoiseOverlay />
     </View>
   );
 }

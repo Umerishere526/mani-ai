@@ -1,11 +1,12 @@
-# ABOUTME: The few things code does to a reply's words: dashes replaced, a title tidied, and the client's buttons at
-# ABOUTME: each step of an offer. Everything else the model writes goes out as written.
+# ABOUTME: The few things code does to a reply's words: its one question last, dashes replaced, a title tidied,
+# ABOUTME: and the client's buttons at each step of an offer. Everything else the model writes goes out as written.
 
 from __future__ import annotations
 
 import re
 
-from mani.chat.greeting import EXAMPLE_LABEL, FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
+from mani.chat import questions
+from mani.chat.greeting import FEELINGS_LABELS, LEAD_IN_LABELS, TALK_MORE_FIRST_LABEL, start_label
 from mani.llm.schema import SmartPrompt
 from mani.models.rows import Framework
 
@@ -28,6 +29,19 @@ def _sentence_after(rest: str) -> bool:
     words before the next stop or the end, with no other dash in between."""
     words = _WORD.findall(re.split(r"[.!?—–]", rest, maxsplit=1)[0])
     return len(words) >= 4 and words[0].lower() in _STARTS_A_SENTENCE
+
+
+def sent_text(text: str, ask: str, *, guarded: bool, open_chat: bool, latest: str) -> tuple[str, str, str | None]:
+    """The model's words as code sends them: the text, then its question (`ask`), held to that one question, and none
+    after a wish to stop or, in the open chat, after frustration with Mani (`latest` is their message as the reply reads
+    it); then the dashes replaced. A guarded turn's words lose nothing, so a safety question is never taken out. Gives the text, the
+    question it asks, and why a question was left out, or None."""
+    if guarded:
+        text, asked, cut = "\n\n".join(part for part in (text.strip(), ask.strip()) if part), "", None
+        asked = ask.strip() or questions.last_question(text)
+    else:
+        text, asked, cut = questions.held_to_one(text, ask, silenced=questions.silenced_by(latest, open_chat=open_chat))
+    return without_dashes(text).strip(), without_dashes(asked).strip(), cut
 
 
 def without_dashes(text: str) -> str:
@@ -71,10 +85,8 @@ def feelings_buttons() -> list[SmartPrompt]:
     return [SmartPrompt(label=label) for label in FEELINGS_LABELS]
 
 
-def start_buttons(framework: Framework, *, with_example: bool) -> list[SmartPrompt]:
-    """The buttons under the five steps, and under the example without its own button. Start carries the framework's
-    id, so it starts only the offer still open."""
-    buttons = [SmartPrompt(label=start_label(framework.name), technique=framework.id)]
-    if with_example:
-        buttons.append(SmartPrompt(label=EXAMPLE_LABEL))
-    return [*buttons, SmartPrompt(label=TALK_MORE_FIRST_LABEL)]
+def start_buttons(framework: Framework) -> list[SmartPrompt]:
+    """The buttons under the five steps: Start, carrying the framework's id so it starts only the offer still open,
+    and Talk more first."""
+    return [SmartPrompt(label=start_label(framework.name), technique=framework.id),
+            SmartPrompt(label=TALK_MORE_FIRST_LABEL)]

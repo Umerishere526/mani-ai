@@ -1,16 +1,18 @@
 {
   "expo": {
-    "name": "mobile",
-    "slug": "mobile",
+    "name": "MANI",
+    "slug": "mani",
     "version": "1.0.0",
     "orientation": "portrait",
     "icon": "./assets/images/icon.png",
-    "scheme": "mobile",
+    "scheme": "mani",
     "userInterfaceStyle": "dark",
     "ios": {
+      "bundleIdentifier": "com.mani.app",
       "icon": "./assets/expo.icon"
     },
     "android": {
+      "package": "com.mani.app",
       "adaptiveIcon": {
         "backgroundColor": "#E6F4FE",
         "foregroundImage": "./assets/images/android-icon-foreground.png",

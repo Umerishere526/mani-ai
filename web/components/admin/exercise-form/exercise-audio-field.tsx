@@ -2,14 +2,15 @@
 // ABOUTME: Split out from exercise-form.tsx to keep the parent component under the line cap.
 
 import type { AdminExercise } from "@/types";
+import { formatDuration } from "@/lib/utils";
 import dictionary from "@/dictionaries/en.json";
-import { FORM_INPUT_CLASSES, FORM_LABEL_CLASSES } from "../form-field-classes";
+import { FORM_FILE_INPUT_CLASSES, FORM_LABEL_CLASSES } from "../form-field-classes";
 
 const STRINGS = dictionary.admin.forms.exercise;
 
 interface ExerciseAudioFieldProps {
   exercise?: AdminExercise;
-  audioUrl: string | null;
+  audioPath: string | null;
   durationMinutes: number | null;
   fileName: string | null;
   isUploading: boolean;
@@ -19,7 +20,7 @@ interface ExerciseAudioFieldProps {
 
 export function ExerciseAudioField({
   exercise,
-  audioUrl,
+  audioPath,
   durationMinutes,
   fileName,
   isUploading,
@@ -30,16 +31,15 @@ export function ExerciseAudioField({
     <div>
       <label className={FORM_LABEL_CLASSES}>{STRINGS.audioLabel}</label>
 
-      {audioUrl && (
+      {audioPath && (
         <div className="mb-2 rounded-mani-sm border border-mani-border bg-mani-bg-card p-3">
           <p className="text-sm text-mani-text">
             {STRINGS.audioCurrentPrefix}
-            {fileName ?? audioUrl.split("/").pop()}
+            {fileName ?? audioPath.split("/").pop()}
           </p>
           <p className="text-sm text-mani-text-muted">
             {STRINGS.audioDurationPrefix}
-            {durationMinutes}
-            {durationMinutes === 1 ? STRINGS.audioDurationSuffix : STRINGS.audioDurationSuffixPlural}
+            {durationMinutes === null ? dictionary.admin.pages.unknown : formatDuration(durationMinutes)}
           </p>
         </div>
       )}
@@ -52,12 +52,12 @@ export function ExerciseAudioField({
           if (file) onFileChange(file);
         }}
         disabled={isUploading}
-        className={FORM_INPUT_CLASSES}
+        className={FORM_FILE_INPUT_CLASSES}
       />
 
       {isUploading && <p className="mt-1 text-sm text-mani-text-muted">{STRINGS.audioUploading}</p>}
       {uploadError && <p className="mt-1 text-sm text-mani-error">{uploadError}</p>}
-      {!exercise && !audioUrl && (
+      {!exercise && !audioPath && (
         <p className="mt-1 text-xs text-mani-text-muted">{STRINGS.audioHelper}</p>
       )}
     </div>

@@ -8,17 +8,20 @@ import uuid
 from dataclasses import dataclass, field
 
 from mani.chat import record as rec
-from mani.chat.greeting import CLOSING_KEEP_CHATTING_LABEL, FINISH_LABEL, GO_TO_LIBRARY_LABEL
+from mani.chat.questions import WANTS_TO_STOP
+from mani.chat.greeting import CONTINUE_CHATTING_LABEL, VISIT_LIBRARY_LABEL
 from mani.chat.repairs import feelings_buttons, lead_in_buttons, start_buttons
 from mani.chat.reply import TurnReply
 from mani.chat.taps import TapEvent
 from mani.chat.techniques import FEELINGS, OFFERING, STEPS, Registry, stages_of
-from mani.llm.schema import LibrarySection, SmartPrompt
+from mani.llm.schema import LIBRARY_HOME, LibrarySection, SmartPrompt
 from mani.models.rows import Framework, TechniqueOutcome, TechniqueState
 
 
 # The person's message an offer may come with at the earliest; the style tap is not one of theirs. The same opening
-# offered on the 2nd message in one run and the 3rd in the next (muhammad, 2026-11-18).
+# offered on the 2nd message in one run and the 3rd in the next (muhammad, 2026-11-18). Kept as a floor against
+# premature offers, the client's most repeated complaint, though her spec sets no fixed number of exchanges
+# (PORT-STATUS, Decisions in force, provisional decision P3 of 2026-11-25).
 OFFER_FROM_MESSAGE = 3
 
 
@@ -35,6 +38,8 @@ class Decision:
     refused: str | None = None
     # The five steps code adds after the reply: a typed answer to the lead-in gets the reply, then the steps.
     show_steps: Framework | None = None
+    # The library section the conversation is closest to, or None while none is known; Visit library opens it.
+    library: str | None = None
 
 
 def stage_of(framework: Framework, reported: str | None, current: str | None) -> str | None:
@@ -54,10 +59,20 @@ def offer_current(open_offer: TechniqueState, message_count: int) -> bool:
     return open_offer.phase != OFFERING or open_offer.at_message_count == message_count
 
 
-def closing_buttons() -> list[SmartPrompt]:
-    return [SmartPrompt(label=CLOSING_KEEP_CHATTING_LABEL),
-            SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value),
-            SmartPrompt(label=FINISH_LABEL)]
+def library_section(named: str | None, record: dict) -> str | None:
+    """The library section the conversation is closest to: the one this reply names, else the one the record kept,
+    each only when it is one of the library's real sections; else None."""
+    return next((section for section in (named, rec.library(record)) if section in set(LibrarySection)), None)
+
+
+def library_button(section: str | None) -> SmartPrompt:
+    """Visit library, opening the section that fits the conversation, or the library's front page when none does."""
+    return SmartPrompt(label=VISIT_LIBRARY_LABEL, library=section or LIBRARY_HOME)
+
+
+def closing_buttons(section: str | None) -> list[SmartPrompt]:
+    """The close: Continue chatting and Visit library."""
+    return [SmartPrompt(label=CONTINUE_CHATTING_LABEL), library_button(section)]
 
 
 def decide(
@@ -66,10 +81,15 @@ def decide(
     end_check_due: bool, end_check_asked: bool, person_messages: int,
 ) -> Decision:
     """The spec's guarantees, in order: a start, a running framework's move, an open offer's answer, a new offer, and
-    the library. A guarded turn (a safety worry open or found) changes no framework state and makes no offer."""
-    base = Decision(declined=rec.declined(record), finished=rec.finished(record))
+    the library. A guarded turn (a safety worry open or found) changes no framework state and makes no offer. When they
+    want to stop, a running or offered set stops too, and the close follows a reply that asks nothing (R95)."""
+    base = Decision(declined=rec.declined(record), finished=rec.finished(record),
+                    library=library_section(reply.library, record))
     if guarded:
         return dataclasses.replace(base, refused="offer" if reply.action == "offer" else None)
+    stopping = reply.question.latest.strip().lower() == WANTS_TO_STOP
+    if stopping:
+        reply = reply.model_copy(update={"action": "stop", "stage": None})
     if tap.starting is not None:
         decision = _started(base, reply, tap.starting, thread_id, count_after)
     elif (open_offer is not None and open_offer.phase == STEPS and (offered := registry.get(open_offer.framework_id))
@@ -87,8 +107,9 @@ def decide(
                       blocked=(running is not None or open_offer is not None or tap.starting is not None
                                or person_messages < OFFER_FROM_MESSAGE))
     if reply.action == "library" and not decision.prompts:
-        decision = dataclasses.replace(decision, prompts=[
-            SmartPrompt(label=GO_TO_LIBRARY_LABEL, library=LibrarySection.HOME.value)])
+        decision = dataclasses.replace(decision, prompts=[library_button(decision.library)])
+    if stopping:
+        decision = dataclasses.replace(decision, prompts=closing_buttons(decision.library))
     return decision
 
 
@@ -104,13 +125,13 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
     if running.phase == FEELINGS:
         # Their answer to how they feel, tapped or typed, closes the set.
         return dataclasses.replace(base, finished=[*base.finished, framework.id], retire_technique=True,
-                                   prompts=closing_buttons())
+                                   prompts=closing_buttons(base.library))
     if reply.action == "stop":
         return dataclasses.replace(base, declined=[*base.declined, framework.id], technique=running.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))
-    on_last = running.phase == stages_of(framework)[-1]
-    # A turn that reaches decide after the safety question was asked is one whose answer settled it: it closes the set.
-    if on_last and (reply.action == "finish" or end_check_asked):
+    # A finish on any stage opens the feelings check: they may have what they came for before the last one. A turn that
+    # reaches decide after the safety question was asked is one whose answer settled it: it closes the set.
+    if reply.action == "finish" or end_check_asked:
         if end_check_due and not end_check_asked:
             return dataclasses.replace(base, end_check=True)
         return dataclasses.replace(base, technique=running.model_copy(update={"phase": FEELINGS}),
@@ -123,13 +144,17 @@ def _moved(base: Decision, reply: TurnReply, framework: Framework, running: Tech
 
 def _answered_offer(base: Decision, open_offer: TechniqueState, offered: Framework | None, tap: TapEvent,
                     reply: TurnReply) -> Decision:
-    """A clear no declines the offer. Talk more first sets it aside for now. A typed answer to the lead-in gets the five
-    steps after the reply (muhammad, 2026-11-18); any other answer after the steps lets the offer lapse."""
+    """A clear no declines the offer. Talk more first sets it aside for now. Show me how is the reply's walk through the
+    steps on their own situation, then the choice to start. A typed answer to the lead-in gets the five steps after the
+    reply (muhammad, 2026-11-18); any other answer after the steps lets the offer lapse."""
     if reply.action == "stop":
         return dataclasses.replace(base, declined=[*base.declined, open_offer.framework_id], technique=open_offer.model_copy(
             update={"outcome": TechniqueOutcome.DECLINED, "phase": None}))
+    if offered is not None and tap.demonstrate is not None:
+        return dataclasses.replace(base, prompts=start_buttons(offered),
+                                   technique=open_offer.model_copy(update={"phase": STEPS}))
     if offered is not None and open_offer.phase == OFFERING and not tap.set_aside:
-        return dataclasses.replace(base, show_steps=offered, prompts=start_buttons(offered, with_example=True),
+        return dataclasses.replace(base, show_steps=offered, prompts=start_buttons(offered),
                                    technique=open_offer.model_copy(update={"phase": STEPS}))
     return dataclasses.replace(base, retire_technique=True)
 

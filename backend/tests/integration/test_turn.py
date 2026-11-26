@@ -6,7 +6,7 @@ import uuid
 import pytest
 
 from mani.chat import crisis, runner
-from mani.chat.reply import Question, Safety
+from mani.chat.reply import Event, Person, Question, Safety, Said
 from mani.db import threads
 from mani.errors import ErrorCategory, ServiceError
 from mani.llm import client
@@ -69,6 +69,23 @@ async def test_notes_written_by_one_turn_reach_the_next_turns_facts(alice, model
     assert "Your notes from your last turn: boss piles work; feels like a pushover" in facts_of(scripted)
 
 
+async def test_people_and_events_carry_to_the_next_turn_and_a_new_conversation_starts_without_them(alice, model):
+    """Each conversation stands alone: what one learned of their people and events never reaches another."""
+    scripted = model(
+        said("That's soon.", people=[Person(called="my sister", relation="sister", told="won't be there")],
+             events=[Event(what="Thanksgiving alone this Thursday", when="upcoming")]),
+        said("I hear you."),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "thanksgiving is thursday and my sister won't be there")
+    await send(alice, thread.id, "yeah")
+    assert ("my sister (sister): won't be there" in facts_of(scripted)
+            and "[upcoming] Thanksgiving alone this Thursday" in facts_of(scripted))
+    other = await start(alice)
+    await send(alice, other.id, "hi")
+    assert "my sister" not in facts_of(scripted) and "Thanksgiving" not in facts_of(scripted)
+
+
 async def test_an_open_chat_reply_keeps_one_question_and_the_next_turn_hears_what_it_was_for(alice, model):
     scripted = model(
         said("You keep saying yes. Why is that?\n\nWhat do you tell yourself would happen if you said no?",
@@ -84,6 +101,99 @@ async def test_an_open_chat_reply_keeps_one_question_and_the_next_turn_hears_wha
     assert '[belief] "What do you tell yourself would happen if you said no?".' in facts_of(scripted)
 
 
+async def test_a_question_their_next_message_answers_is_told_as_already_answered(alice, model):
+    scripted = model(
+        said("That stings.\n\nWhat did he say?", question=Question(intent="situation")),
+        said("Lazy is a hard word to hear.", question=Question(latest="answer", answered="called me lazy")),
+        said("I hear you."),
+    )
+    thread = await start(alice)
+    await send(alice, thread.id, "my boss had a go at me")
+    await send(alice, thread.id, "he called me lazy in front of everyone")
+    await send(alice, thread.id, "yeah")
+    assert '[situation] "What did he say?" (already answered: "called me lazy")' in facts_of(scripted)
+
+
+async def test_a_reply_reaches_them_with_its_own_question_last_and_every_sentence_whole(alice, model):
+    """At most one question per reply in every style: the one the reply chose, in any form, after its text. A question
+    the text slipped in is taken out whole; a guarded turn's words lose nothing."""
+    scripted = model(
+        said("Your sister leans on you a lot. Why do you think that is?",
+             question=Question(latest="answer", intent="situation", ask="Tell me about the last time she asked.")),
+        said("Okay.", question=Question(latest="answer", intent="wants", ask="What would you want her to hear?")),
+        said("B is for Belief. What went through your mind?", stage="belief",
+             question=Question(ask="What did you tell yourself about it?")),
+        said("That sounds frightening. Are you hurt?", level="unsure", safety=Safety(level="unsure", about="themselves"),
+             question=Question(ask="Is anyone with you right now?")),
+    )
+    thread = await start(alice, style="Directive")
+    first = await send(alice, thread.id, "my sister always asks me for money")
+    assert first.content == "Your sister leans on you a lot.\n\nTell me about the last time she asked."
+    assert first.trace["question_cut"] == "question in the text"
+    await send(alice, thread.id, "last week, again")
+    assert '[situation] "Tell me about the last time she asked."' in facts_of(scripted)
+    await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "activate")
+    stage = await send(alice, thread.id, "she called friday and i said yes")
+    assert stage.content == "B is for Belief.\n\nWhat did you tell yourself about it?"
+    guarded = await send(alice, thread.id, "i don't want to be here anymore")
+    assert guarded.content == "That sounds frightening. Are you hurt?\n\nIs anyone with you right now?"
+
+
+async def test_a_held_worry_whose_text_already_asks_its_question_asks_it_once(alice, model):
+    """TC-13 (2026-11-25): with a worry held, the text and the chosen question both carried the same question, and the
+    person read it twice."""
+    question = "How long has it been like this for you?"
+    model(said("Okay. That's clear.", level="unsure", safety=Safety(level="unsure", about="themselves")),
+          said(f"So it's exhaustion more than anything.\n\n{question}", question=Question(latest="answer", ask=question)))
+    thread = await start(alice)
+    await send(alice, thread.id, "i feel numb lately. i wish i could disappear")
+    turn = await send(alice, thread.id, "no, i'd never hurt myself. i'm just exhausted")
+    assert turn.content == f"So it's exhaustion more than anything.\n\n{question}"
+    assert turn.trace["enforced"] == ["repeated_question"]
+
+
+async def test_a_forbidden_word_and_a_banned_line_never_reach_them_and_the_trace_counts_both(alice, model):
+    """Behavioral Framework and Safety Guardrails section 6, which the prompt alone let through (TC-03, TC-17)."""
+    model(said("I'm here for you. Two words, and they land hard.",
+               question=Question(latest="adds_more", ask="What happened when you were struggling last time?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "she just said 'whatever' and left")
+    assert turn.content == "Two words, and they hit hard.\n\nWhat happened when you were finding it hard last time?"
+    assert turn.trace["enforced"] == ["forbidden_word:land", "forbidden_word:struggling", "banned_line_removed"]
+
+
+async def test_a_long_directive_reply_reaches_them_as_three_sentences(alice, model):
+    """Directive is two or three short sentences, its question included; 7 eval replies ran to 4 or 5 (CQ-3)."""
+    model(said("A job you believe in can still cost too much. You've said it twice. That matters a lot.",
+               question=Question(latest="answer", ask="What feels hardest about it?")))
+    thread = await start(alice, style="Directive")
+    turn = await send(alice, thread.id, "i love the work but it's eating my evenings")
+    assert turn.content == ("A job you believe in can still cost too much. You've said it twice.\n\n"
+                            "What feels hardest about it?")
+    assert turn.trace["enforced"] == ["directive_trimmed"]
+
+
+async def test_an_opening_this_conversation_already_used_is_dropped_when_the_rest_stands(alice, model):
+    """Pacing Rules and R116: the openers ledger was shown to the model, but nothing enforced it (CQ-5)."""
+    model(said("That makes sense. The work kept coming.", question=Question(latest="answer", ask="What came first?")),
+          said("That makes sense. The evenings went too.", question=Question(latest="answer", ask="When did that start?")))
+    thread = await start(alice)
+    await send(alice, thread.id, "work has been a lot")
+    turn = await send(alice, thread.id, "and now my evenings are gone")
+    assert turn.content == "The evenings went too.\n\nWhen did that start?"
+    assert turn.trace["enforced"] == ["opener_dropped"]
+
+
+async def test_a_chosen_question_that_asks_two_reaches_them_as_one(alice, model):
+    """At most one question per reply (Pacing Rules): the chosen question itself may ask two."""
+    model(said("That week sounds long.", question=Question(
+        latest="answer", ask="What happened on Friday? Was it the same as last time?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "friday was the worst of it")
+    assert turn.content == "That week sounds long.\n\nWhat happened on Friday?"
+    assert turn.trace["enforced"] == ["second_question_removed"]
+
+
 # Two ordinary exchanges first: an offer may come with the person's 3rd message at the earliest.
 WARM_UP = (said("Go on."), said("Tell me more."))
 
@@ -93,15 +203,14 @@ async def warm_up(alice, thread_id) -> None:
     await send(alice, thread_id, "my boss keeps adding things")
 
 
-async def abcde_text(kind: str, style: str = "supportive") -> str:
+async def abcde_steps(style: str = "supportive") -> str:
     from mani.chat import techniques
     from mani.prompts import cache
 
-    framework = (await cache.load()).registry.get("abcde")
-    return techniques.steps_text(framework, style) if kind == "steps" else techniques.example_text(framework)
+    return techniques.steps_text((await cache.load()).registry.get("abcde"), style)
 
 
-START = ["Start ABCDE", "I need an example", "Talk more first"]
+START = ["Start ABCDE", "Talk more first"]
 
 
 async def test_a_clear_offer_is_the_lead_in_with_its_three_buttons(alice, model):
@@ -114,8 +223,8 @@ async def test_a_clear_offer_is_the_lead_in_with_its_three_buttons(alice, model)
     assert (await technique_of(alice, thread.id)).outcome is TechniqueOutcome.OFFERED
 
 
-async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
-    """The client's sequence document, 2026-11-18: the steps and the example are hers, sent with no model call."""
+async def test_the_offer_runs_lead_in_steps_then_start(alice, model):
+    """The client's sequence document, 2026-11-18: the steps are hers, sent with no model call."""
     scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
                      said("A is for Activating Event. What happened?", stage="activate"),
                      said("B is for Belief. What did you tell yourself?", stage="belief"))
@@ -123,16 +232,51 @@ async def test_the_offer_runs_lead_in_steps_example_then_start(alice, model):
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     steps = await send(alice, thread.id, "Not sure")
-    assert scripted.calls == 3 and steps.content == await abcde_text("steps")
+    assert scripted.calls == 3 and steps.content == await abcde_steps()
     assert [p.label for p in steps.prompts] == START
-    example = await send(alice, thread.id, "I need an example")
-    assert scripted.calls == 3 and example.content == await abcde_text("example")
-    assert [p.label for p in example.prompts] == ["Start ABCDE", "Talk more first"]
     await send(alice, thread.id, "Start ABCDE")
     assert (await technique_of(alice, thread.id)).phase == "activate"
     await send(alice, thread.id, "he dumped a report on me friday")
     technique = await technique_of(alice, thread.id)
     assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "belief"
+
+
+async def test_show_me_how_walks_the_steps_on_their_situation_then_offers_the_start(alice, model):
+    """Lolly, 2026-11-20: Show me how demonstrates the five steps on the person's own situation, inventing nothing,
+    then invites them to try it; it is the model's reply, never the fixed five steps."""
+    walk = "A: your boss keeps adding things. B: what you tell yourself then is yours to fill in."
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
+                     said(walk, question=Question(ask="Want to try it on your own?")),
+                     said("A is for Activating Event. What happened?", stage="activate"))
+    thread = await start(alice)
+    await warm_up(alice, thread.id)
+    await send(alice, thread.id, "i feel like a pushover")
+    shown = await send(alice, thread.id, "Show me how")
+    assert scripted.calls == 4 and shown.content == f"{walk}\n\nWant to try it on your own?"
+    told = facts_of(scripted)
+    assert "They tapped Show me how" in told and "only what they have told you" in told
+    assert "lead-in to ABCDE" not in told, "the lead-in's next step is not what happens"
+    assert [p.label for p in shown.prompts] == ["Start ABCDE", "Talk more first"]
+    assert (await technique_of(alice, thread.id)).phase == "steps"
+    await send(alice, thread.id, "Start ABCDE")
+    technique = await technique_of(alice, thread.id)
+    assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "activate"
+
+
+async def test_give_me_a_tool_starts_the_first_stage_at_once(alice, model):
+    """Lolly, 2026-11-20: Give me a tool begins the exercise immediately, prefilling what it can."""
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
+                     said("A is for Activating Event. Your boss keeps adding things. Is that the situation?",
+                          stage="activate"))
+    thread = await start(alice)
+    await warm_up(alice, thread.id)
+    await send(alice, thread.id, "i feel like a pushover")
+    turn = await send(alice, thread.id, "Give me a tool")
+    assert scripted.calls == 4 and turn.prompts == []
+    told = facts_of(scripted)
+    assert "They tapped Give me a tool" in told and "ask openly what they would add or change in it" in told
+    technique = await technique_of(alice, thread.id)
+    assert technique.outcome is TechniqueOutcome.ACCEPTED and technique.phase == "activate"
 
 
 async def test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps(alice, model):
@@ -141,7 +285,7 @@ async def test_a_typed_reply_to_the_lead_in_gets_the_reply_then_the_steps(alice,
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     turn = await send(alice, thread.id, "maybe look at what i've actually managed?")
-    assert turn.content == "That's a fair way to start.\n\n" + await abcde_text("steps")
+    assert turn.content == "That's a fair way to start.\n\n" + await abcde_steps()
     assert [p.label for p in turn.prompts] == START
     assert (await technique_of(alice, thread.id)).phase == "steps"
 
@@ -152,7 +296,7 @@ async def test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back(alice, 
     thread = await start(alice)
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
-    await send(alice, thread.id, "Show me how")
+    await send(alice, thread.id, "Not sure")
     await send(alice, thread.id, "Talk more first")
     technique = await technique_of(alice, thread.id)
     assert technique.outcome is TechniqueOutcome.OFFERED and technique.phase is None, "set aside, not declined"
@@ -161,27 +305,81 @@ async def test_talk_more_first_lets_the_offer_lapse_and_it_may_come_back(alice, 
 
 
 async def test_a_declined_framework_is_never_offered_again(alice, model):
-    model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Okay, we'll leave it.", action="stop"),
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"), said("Okay, we'll leave it.", action="stop"),
           said("Offer again.", action="offer", framework="abcde"))
     thread = await start(alice)
     await warm_up(alice, thread.id)
     await send(alice, thread.id, "i feel like a pushover")
     await send(alice, thread.id, "no, i don't want to do any exercise")
     turn = await send(alice, thread.id, "still feel like a pushover")
+    assert offers_in(scripted.schemas[-1]) == ["thought_reframe"]
     assert turn.prompts == [] and turn.trace["refused"] == "offer"
 
 
+async def test_a_question_asked_in_a_set_and_what_the_reply_gave_reach_the_next_turn(alice, model):
+    """Repetition inside a set: the stage's question, the reply's move and its opening words are kept like any other."""
+    scripted = model(
+        said("That's a clear moment. B is for Belief. What went through your mind?", stage="belief",
+             said=Said(move="acknowledge", gist="named the meeting moment")),
+        said("I hear you.", stage="belief"),
+    )
+    thread = await start(alice)
+    await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "activate")
+    await send(alice, thread.id, "he yelled at me in the meeting on monday")
+    await send(alice, thread.id, "that i'm useless")
+    told = facts_of(scripted)
+    assert '[belief] "What went through your mind?"' in told
+    assert "acknowledge: named the meeting moment" in told and '"That\'s a clear moment"' in told
+
+
 async def test_after_e_the_feelings_check_then_the_closing_buttons(alice, model):
-    model(said("That's a strong shift. How are you feeling now?", action="finish", stage="effective"),
-          said("Excellent. You found a path forward."))
+    scripted = model(said("That's a strong shift. How are you feeling now?", action="finish", stage="effective"),
+                     said("Thanks for saying so. What do you still need?"))
     thread = await start(alice)
     await put_technique(thread.id, "abcde", TechniqueOutcome.ACCEPTED, "effective")
     check = await send(alice, thread.id, "I can be a team player and still say no")
     assert [p.label for p in check.prompts] == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
     assert "abcde" not in ((await thread_row(alice, thread.id)).understanding.get("finished") or [])
-    closed = await send(alice, thread.id, "Feel more focused")
-    assert [p.label for p in closed.prompts] == ["Keep Chatting", "Go to Library", "Finish for Now"]
+    closed = await send(alice, thread.id, "I'm not sure yet")
+    assert "They tapped the button \"I'm not sure yet\"" in facts_of(scripted)
+    assert [p.label for p in closed.prompts] == ["Continue chatting", "Visit library"]
     assert (await thread_row(alice, thread.id)).understanding["finished"] == ["abcde"]
+
+
+async def test_visit_library_opens_the_section_an_earlier_reply_named(alice, model):
+    """LIB-3: the section a reply names is kept on the thread, so a later Visit library opens it."""
+    model(said("That sounds exhausting.", library="Burnout"),
+          said("The library has exercises for moments like this.", action="library"))
+    thread = await start(alice)
+    await send(alice, thread.id, "i'm running on empty at work")
+    turn = await send(alice, thread.id, "can you give me something to try?")
+    assert [(p.label, p.library) for p in turn.prompts] == [("Visit library", "Burnout")]
+    assert (await thread_row(alice, thread.id)).understanding["library"] == "Burnout"
+
+
+async def test_a_typed_wish_to_stop_gets_a_goodbye_with_no_question_and_the_close(alice, model):
+    """R95, the 2026-11-16 relationship test: "Yes, I'm done for now." got another question."""
+    model(said("Of course. Take good care tonight.",
+               question=Question(latest="wants_to_stop", ask="Would you like to come back to this another time?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "Yes, I'm done for now.")
+    assert turn.content == "Of course. Take good care tonight."
+    assert [p.label for p in turn.prompts] == ["Continue chatting", "Visit library"]
+    assert turn.trace["question_cut"] == "question after a wish to stop"
+
+
+async def test_a_typed_stop_the_model_missed_still_closes_with_no_question_except_on_a_guarded_turn(alice, model):
+    """Eval rule-typed-done (3/3) and TC-17: the model asked what "done" meant, so the stop path never ran (R95)."""
+    model(said("Okay, we can leave it there.", question=Question(latest="other", ask="What do you mean by done?")),
+          said("Okay.", level="unsure", safety=Safety(level="unsure", about="themselves"),
+               question=Question(latest="other", ask="Are you safe right now?")))
+    thread = await start(alice)
+    turn = await send(alice, thread.id, "that's all, thanks")
+    assert turn.content == "Okay, we can leave it there."
+    assert [p.label for p in turn.prompts] == ["Continue chatting", "Visit library"]
+    assert turn.trace["enforced"] == ["typed_stop"]
+    guarded = await send(alice, thread.id, "bye")
+    assert guarded.content == "Okay.\n\nAre you safe right now?" and "enforced" not in guarded.trace
 
 
 async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, model):
@@ -196,8 +394,8 @@ async def test_a_finish_after_danger_sends_the_end_check_then_the_close(alice, m
     check = await send(alice, thread.id, "i'm okay now, my sister is here")
     assert [p.label for p in check.prompts] == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
     assert (await thread_row(alice, thread.id)).understanding["safety_end_check"] == "done"
-    closed = await send(alice, thread.id, "Feel stronger")
-    assert [p.label for p in closed.prompts][-1] == "Finish for Now"
+    closed = await send(alice, thread.id, "Better")
+    assert [p.label for p in closed.prompts] == ["Continue chatting", "Visit library"]
 
 
 async def test_a_set_stopped_while_the_end_check_waits_leaves_no_question_marked_as_asked(alice, model):
@@ -483,14 +681,63 @@ async def test_an_owed_return_check_comes_before_the_five_steps(alice, model):
     assert scripted.calls == 4 and turn.content == crisis.RETURN_CHECK_REPLY
 
 
+def offers_in(schema: type) -> list[str] | None:
+    """The sets the reply's schema lets the model offer, or None when `offer` is not an action at all."""
+    properties = schema.model_json_schema()["properties"]
+    if "offer" not in properties["action"]["enum"]:
+        return None
+    return properties["framework"]["anyOf"][0]["enum"]
+
+
 async def test_an_offer_on_the_persons_second_message_is_refused_and_the_next_may_offer(alice, model):
-    """The style tap is not one of their messages; their 2nd message gets no offer, their 3rd may."""
-    model(said("Go on."), said("Lead-in.", action="offer", framework="abcde"),
-          said("Lead-in.", action="offer", framework="abcde"))
+    """The style tap is not one of their messages; their 2nd message is not shown `offer` at all, their 3rd may offer.
+    A 2nd reply that offers anyway is open chat: no buttons, one question, and the question kept for the next turn."""
+    scripted = model(
+        said("Go on."),
+        said("Nobody asks. Why do you think that is? How could you test that thought?", action="offer",
+             framework="abcde", question=Question(latest="adds_more", intent="belief")),
+        said("Lead-in.", action="offer", framework="abcde"))
     thread = await start(alice)
     await send(alice, thread.id, "i'm tired of always being the understanding friend")
     second = await send(alice, thread.id, "nobody checks in on me")
+    assert offers_in(scripted.schemas[-1]) is None
     assert second.prompts == [] and second.trace["refused"] == "offer"
+    assert second.content == "Nobody asks. How could you test that thought?"
     assert await technique_of(alice, thread.id) is None
     third = await send(alice, thread.id, "i don't think they'd help")
+    assert offers_in(scripted.schemas[-1]) == ["abcde", "thought_reframe"]
+    assert '[belief] "How could you test that thought?"' in facts_of(scripted)
     assert [p.label for p in third.prompts] == ["Not sure", "Show me how", "Give me a tool"]
+
+
+async def test_the_reply_the_steps_follow_begins_no_stage(alice, model):
+    """Manasa's Reflective Chat 2 (2026-11-25): Step 1 came before the steps, then again once she said yes."""
+    scripted = model(*WARM_UP, said("Lead-in.", action="offer", framework="abcde"),
+                     said("That's clearer. A is for Activating Event. What happened the last time?",
+                          question=Question(ask="What happened the last time?"), stage="activate"),
+                     said("A is for Activating Event. What happened the last time?", stage="activate"))
+    thread = await start(alice)
+    await warm_up(alice, thread.id)
+    await send(alice, thread.id, "i feel like a pushover")
+    steps = await send(alice, thread.id, "i just want to stop saying yes to everything")
+    assert steps.content == "That's clearer.\n\n" + await abcde_steps()
+    assert "stage_in_offer" in steps.trace["enforced"]
+    assert (await technique_of(alice, thread.id)).phase == "steps"
+    await send(alice, thread.id, "Start ABCDE")
+    assert scripted.calls == 5 and (await technique_of(alice, thread.id)).phase == "activate"
+
+
+async def test_a_request_not_yet_given_is_put_to_every_later_turn_until_a_reply_gives_it(alice, model):
+    """muhammad's email of 2026-11-25: MANI keeps the person's request in mind on every turn, wherever they make it."""
+    scripted = model(
+        said("Before the words, one thing: who will be there?", request_open="the words to say to my sister"),
+        said("Okay, a party.", request_open="the words to say to my sister"),
+        said('Something like: "I can\'t lend money this time, and I love you."'),
+        said("Glad that helps."))
+    thread = await start(alice)
+    await send(alice, thread.id, "can you give me the words to say to my sister?")
+    await send(alice, thread.id, "it's at her party")
+    assert "They asked for something you have not fully given yet: the words to say to my sister" in facts_of(scripted)
+    await send(alice, thread.id, "ok")
+    await send(alice, thread.id, "thanks")
+    assert "have not fully given yet" not in facts_of(scripted)

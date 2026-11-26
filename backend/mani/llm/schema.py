@@ -9,15 +9,23 @@ from pydantic import BaseModel, ConfigDict, Field
 
 
 class LibrarySection(StrEnum):
-    """Where a library button navigates to. A closed set, checked before it is stored."""
+    """The library's sections, as the client lists them (2026-11-16): the category every exercise sits in, and where a
+    library button can open. A closed set, so a typo never becomes a section of its own."""
 
-    HOME = "home"
-    EMOTIONAL_INTELLIGENCE = "EmotionalIntelligence"
-    NARCISSISTIC_DYNAMICS = "NarcissisticDynamics"
-    BUILDING_HABITS = "BuildingHabits"
-    BOUNDARIES = "Boundaries"
     ANXIETY = "Anxiety"
+    BOUNDARIES = "Boundaries"
+    BUILDING_HABITS = "BuildingHabits"
+    EMOTIONAL_INTELLIGENCE = "EmotionalIntelligence"
+    LOVE_RELATIONSHIPS = "LoveRelationships"
+    MANAGING_WORRY = "ManagingWorry"
+    SLEEP = "Sleep"
     BURNOUT = "Burnout"
+    STRESS = "Stress"
+    WORKPLACE_CHALLENGES = "WorkplaceChallenges"
+
+
+# The library's front page, where a library button goes when no section fits. Not a section: no exercise sits in it.
+LIBRARY_HOME = "home"
 
 
 def _listed(values) -> str:
@@ -40,8 +48,8 @@ class Button(BaseModel):
         default=None,
         description=(
             "Set only when this button navigates to the library. Null otherwise. "
-            f"One of: {_listed(LibrarySection)}. \"home\" is the library's front page: "
-            "use it for a general Go to Library button."
+            f"One of: {_listed([LIBRARY_HOME, *LibrarySection])}. \"home\" is the library's front page: "
+            "use it for a general Visit library button."
         ),
     )
     decline: bool | None = Field(

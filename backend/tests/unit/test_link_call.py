@@ -1,8 +1,9 @@
-# ABOUTME: Checks link_call's retry against the race it exists to survive.
+# ABOUTME: Checks that a model call's link to its message, written after the turn commits, never fails the reply.
 # ABOUTME: No database - pool.as_admin and attach_message are both faked.
 
 from __future__ import annotations
 
+import logging
 from contextlib import asynccontextmanager
 
 import asyncpg
@@ -28,47 +29,17 @@ def admin_pool(monkeypatch):
     monkeypatch.setattr(pool_module, "as_admin", fake_as_admin)
 
 
-def not_found() -> asyncpg.PostgresError:
-    # attach_message's real failure mode: the message row is not yet visible to this
-    # connection, because the transaction that wrote it has not committed.
-    return asyncpg.ForeignKeyViolationError("message_id not yet visible")
-
-
-async def test_a_race_that_clears_on_the_second_attempt_still_links(monkeypatch):
+async def test_a_link_that_cannot_be_stored_is_logged_and_never_raised(monkeypatch, caplog):
     calls = {"n": 0}
 
-    async def flaky(conn, call_id, message_id):
+    async def refused(conn, call_id, message_id):
         calls["n"] += 1
-        if calls["n"] < 2:
-            raise not_found()
+        raise asyncpg.ForeignKeyViolationError("message_id is not present")
 
-    monkeypatch.setattr(llm_calls, "attach_message", flaky)
-    monkeypatch.setattr(turn, "LINK_RETRY_DELAY_SECONDS", 0)
+    monkeypatch.setattr(llm_calls, "attach_message", refused)
 
-    await turn.link_call(call_id="c", message_id="m")
-
-    assert calls["n"] == 2
-
-
-async def test_a_race_that_never_clears_gives_up_without_raising(monkeypatch):
-    async def always_fails(conn, call_id, message_id):
-        raise not_found()
-
-    monkeypatch.setattr(llm_calls, "attach_message", always_fails)
-    monkeypatch.setattr(turn, "LINK_RETRY_DELAY_SECONDS", 0)
-
-    # Never raises - a failed link costs a forensic record, not a delivered reply.
-    await turn.link_call(call_id="c", message_id="m")
-
-
-async def test_a_clean_first_attempt_does_not_retry(monkeypatch):
-    calls = {"n": 0}
-
-    async def clean(conn, call_id, message_id):
-        calls["n"] += 1
-
-    monkeypatch.setattr(llm_calls, "attach_message", clean)
-
-    await turn.link_call(call_id="c", message_id="m")
+    with caplog.at_level(logging.WARNING, logger=turn.logger.name):
+        await turn.link_call(call_id="c", message_id="m")
 
     assert calls["n"] == 1
+    assert [r.getMessage() for r in caplog.records] == ["could not store the link from llm call c to message m"]

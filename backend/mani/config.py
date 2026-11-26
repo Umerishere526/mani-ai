@@ -64,6 +64,11 @@ class Settings(BaseSettings):
     # thinks before its first token, and the longest of those silences ran past 20 s while its
     # neighbours took 5 (2026-10-21), so a second try usually answers faster than waiting.
     chat_first_token_seconds: float = 15.0
+    # How long a chat call may send nothing before a second request starts on the prompt row's other host, beside
+    # the first; whichever answers first is the reply and the other is cancelled. Providers slowed to 20 to 27 s,
+    # first chunk past 15 s, where 104 turns had their first chunk at p50 2.2 s and p95 4.2 s (2026-11-25), so a race
+    # starts only for a stalled host. No other host, no race.
+    chat_hedge_seconds: float = Field(default=8.0, gt=0)
     # Both attempts of a chat call together, so a retry gets only what the first left. Every wait on a turn's
     # path adds up under the chat-tester's 90 s (PORT-STATUS, "Every wait on a turn adds up under 90 s").
     chat_budget_seconds: float = 65.0
@@ -74,7 +79,11 @@ class Settings(BaseSettings):
 
     # Connections one instance holds to the database, through Supabase's transaction pooler. No turn
     # holds one across a model call, so a few serve many turns; every instance multiplies the max.
-    db_pool_min_size: int = Field(default=0, ge=0)
+    # The minimum is opened when the app starts, so the first turn on an instance finds a connection already made
+    # rather than paying the connect and TLS handshake itself. Where an instance starts for the request that wakes it
+    # (Vercel), that wait moves into the start rather than going away; where instances start ahead of traffic it is
+    # gone. asyncpg closes a connection idle for 300 s, minimum included, so a quiet instance connects again.
+    db_pool_min_size: int = Field(default=1, ge=0)
     db_pool_max_size: int = Field(default=5, ge=1)
     # How long a request waits for a free connection before it is refused as busy, never left hanging.
     db_acquire_timeout_seconds: float = 5.0
@@ -84,6 +93,10 @@ class Settings(BaseSettings):
     # Used when a prompt row names no model of its own.
     default_chat_model: str = "openai/gpt-6-luna"
     default_summary_model: str = "openai/gpt-6-luna"
+    # The reply check (mani/chat/check.py): a second short call on the chat's model that rewrites readings said as
+    # fact and figures of speech before a reply is sent. It adds a second or two to a turn; off sends replies as written.
+    reply_check_enabled: bool = True
+    reply_check_seconds: float = 8.0
 
     # How much of a thread the model is shown, in characters of message content. Within it the
     # whole thread is sent, so nothing said earlier has to be guessed into a store ahead of time
@@ -102,6 +115,9 @@ class Settings(BaseSettings):
     # special-category health data, so upstream training use is refused here
     # rather than relying on a provider's default terms.
     openrouter_data_collection: Literal["deny", "allow"] = "deny"
+    # Only endpoints that keep no copy of a prompt or its reply may serve a call. Refusing training use
+    # does not stop a provider retaining what it was sent for its own review.
+    openrouter_zdr: bool = True
 
     # The only companies a conversation may go to. Without this OpenRouter may route it to any
     # provider serving the model, under whatever terms that provider applies. A base slug
@@ -123,6 +139,10 @@ class Settings(BaseSettings):
     # Background calls always use the default tier. `default` turns it off with no change to code.
     openrouter_chat_service_tier: Literal["priority", "default"] = "priority"
 
+    def data_policy(self) -> dict:
+        """What OpenRouter is told about keeping and using what a call sends, on every call."""
+        return {"data_collection": self.openrouter_data_collection, "zdr": self.openrouter_zdr}
+
     def routing(self, overrides: dict | None = None, *, priority: bool = False) -> dict:
         """OpenRouter `provider` options for a call, with per-prompt overrides applied.
 
@@ -135,8 +155,7 @@ class Settings(BaseSettings):
             "only": self.openrouter_providers,
             "sort": self.openrouter_sort,
             "allow_fallbacks": self.openrouter_allow_fallbacks,
-            "data_collection": self.openrouter_data_collection,
-        } | (overrides or {})
+        } | self.data_policy() | (overrides or {})
         if priority:
             provider["only"] = [*provider["only"], *(f"{slug}/priority" for slug in provider["only"])]
         return provider
@@ -176,10 +195,9 @@ class Settings(BaseSettings):
     # Seconds the chat stays paused once someone in danger continues with nothing in place.
     crisis_pause_seconds: int = Field(default=30, ge=1)
 
-    # Paid replies one person may get in 24 hours. 0 turns it off. muhammad's number is 300,
-    # off for now so testing is not capped; set it before real traffic. Only turns that call
-    # the model count, and the safety screen runs before it - a crisis is always answered.
-    daily_message_limit: int = Field(default=0, ge=0)
+    # Paid replies one person may get in 24 hours (muhammad's number). 0 turns it off. Only turns that call the
+    # model count, and it never applies while a safety worry is open or a return check is owed.
+    daily_message_limit: int = Field(default=300, ge=0)
     # Paid replies one person may get in a minute, counted the same way. 0 turns it off.
     minute_message_limit: int = Field(default=10, ge=0)
 
@@ -223,12 +241,17 @@ class Settings(BaseSettings):
             raise ValueError(f"production requires: {', '.join(missing)}")
         return self
 
+    @property
+    def jwt_issuer(self) -> str:
+        """The `iss` Supabase Auth puts on every token it issues: the project's API URL with /auth/v1."""
+        return f"{self.supabase_url.rstrip('/')}/auth/v1"
+
     @computed_field
     @property
     def jwks_url(self) -> str:
         if self.supabase_jwks_url:
             return self.supabase_jwks_url
-        return f"{self.supabase_url.rstrip('/')}/auth/v1/.well-known/jwks.json"
+        return f"{self.jwt_issuer}/.well-known/jwks.json"
 
     @computed_field
     @property

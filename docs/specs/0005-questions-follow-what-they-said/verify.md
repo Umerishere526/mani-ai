@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): this spec describes code deleted or rebuilt since, most of it with the one-call turn of 2026-11-17. What the backend does today is in `backend/PORT-STATUS.md`.
+
 # Verify: questions follow what the person said · spec 0005 · updated 2026-10-13
 _Steps derived from spec 0005 acceptance criteria. `/check verify` runs these; `/test` locks the durable ones._
 

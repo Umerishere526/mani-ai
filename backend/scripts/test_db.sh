@@ -81,7 +81,7 @@ if [ "$TARGET" = "throwaway" ]; then
   # before it held them, and after_NNN.sql asserts where the migration put them (2026-11-10: 036 passed on every
   # empty database and failed on the first one with rows to move).
   for migration in "$HERE"/supabase/migrations/*.sql; do
-    number="$(basename "$migration" | cut -c1-3)"
+    number="$(basename "$migration" | cut -d_ -f1)"
     if [ -f "$HERE/tests/sql/migrations/before_$number.sql" ]; then
       echo "planting rows for $number"
       run_sql "$HERE/tests/sql/migrations/before_$number.sql"

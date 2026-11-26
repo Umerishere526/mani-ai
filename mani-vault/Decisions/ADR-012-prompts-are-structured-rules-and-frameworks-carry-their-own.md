@@ -1,6 +1,6 @@
 ---
 type: decision
-status: accepted
+status: superseded
 date: 2026-10-07
 apps: [backend]
 tags: [decision, ai, prompts, persona]
@@ -8,7 +8,7 @@ tags: [decision, ai, prompts, persona]
 
 # ADR-012: The base prompts are structured rules, short, and frameworks carry their own
 
-**Status:** accepted by muhammad, 2026-10-07. Phases 2 and 3 are done; phases 4 to 7 are still to do.
+**Status:** superseded 2026-11-17: the one prompt `content/prompts/mani.md` replaced `mani_base`, `response_format` and the style prompts (`backend/PORT-STATUS.md`, "Retired 2026-11-17: one home per rule"). Accepted by muhammad, 2026-10-07, with phases 2 and 3 done.
 **Affects:** backend (`content/prompts/mani_base.md`, `content/prompts/response_format.md`, later the framework files,
 `composer.py` and `context.py`)
 

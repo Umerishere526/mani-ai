@@ -4,3 +4,4 @@
 export { CrisisButton, type CrisisButtonProps } from './crisis-button';
 export { CrisisDrawer, type CrisisDrawerProps } from './crisis-drawer';
 export { CrisisGuidance } from './crisis-guidance';
+export { CrisisScreen } from './crisis-screen';

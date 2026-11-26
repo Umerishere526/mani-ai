@@ -1,5 +1,5 @@
-# ABOUTME: What a tapped button means for the turn: which framework starts, when the five steps or the example are
-# ABOUTME: due, when an offer is set aside, and what the reply is told; a tap on a stale button means nothing.
+# ABOUTME: What a tapped button means for the turn: which framework starts, when the five steps or the walk-through
+# ABOUTME: are due, when an offer is set aside, and what the reply is told; a stale button means nothing.
 
 from mani.chat.taps import tap_event
 from mani.chat.techniques import stages_of
@@ -22,14 +22,23 @@ def test_start_tells_the_reply_the_first_stage_only():
     assert "from the whole story to one moment" in fact
 
 
-def test_each_lead_in_button_asks_for_the_five_steps():
+def test_the_three_lead_in_buttons_are_three_different_experiences():
+    """Lolly, 2026-11-20: Not sure explains, Show me how demonstrates on their situation, Give me a tool begins."""
+    not_sure = tap_event(SmartPrompt(label="Not sure"), REGISTRY, offered("abcde"))
+    assert not_sure.explain.id == "abcde" and not_sure.starting is None and not_sure.demonstrate is None
+    show = tap_event(SmartPrompt(label="Show me how"), REGISTRY, offered("abcde"))
+    assert show.demonstrate.id == "abcde" and show.starting is None and show.explain is None
+    assert "only what they have told you" in show.fact and "never invent" in show.fact
+    assert "theirs to fill in" in show.fact
+    tool = tap_event(SmartPrompt(label="Give me a tool"), REGISTRY, offered("abcde"))
+    assert tool.starting.id == "abcde" and tool.explain is None
+    assert '"A is for Activating Event."' in tool.fact and "B is for" not in tool.fact
+
+
+def test_a_lead_in_button_with_no_offer_open_means_nothing_to_the_offer():
     for label in ("Not sure", "Show me how", "Give me a tool"):
-        assert tap_event(SmartPrompt(label=label), REGISTRY, offered("abcde")).explain.id == "abcde", label
-        assert tap_event(SmartPrompt(label=label), REGISTRY, None).explain is None
-
-
-def test_i_need_an_example_asks_for_the_worked_example():
-    assert tap_event(SmartPrompt(label="I need an example"), REGISTRY, offered("abcde", "steps")).example.id == "abcde"
+        event = tap_event(SmartPrompt(label=label), REGISTRY, None)
+        assert (event.explain, event.demonstrate, event.starting) == (None, None, None), label
 
 
 def test_talk_more_first_sets_the_offer_aside_and_never_declines_it():
@@ -37,14 +46,9 @@ def test_talk_more_first_sets_the_offer_aside_and_never_declines_it():
     assert event.set_aside is True and event.starting is None and event.fact
 
 
-def test_finish_for_now_after_the_questions_asks_for_a_goodbye():
-    event = tap_event(SmartPrompt(label="Finish for Now"), REGISTRY, None)
-    assert "ask nothing" in event.fact
-
-
 def test_no_tap_means_nothing():
     event = tap_event(None, REGISTRY, offered("abcde"))
-    assert (event.fact, event.starting, event.set_aside, event.explain, event.example) == (None, None, False, None, None)
+    assert (event.fact, event.starting, event.set_aside, event.explain) == (None, None, False, None)
 
 
 def test_a_frameworks_stages_are_its_phases_after_the_offer():

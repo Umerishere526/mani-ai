@@ -3,11 +3,13 @@
 
 export { ChatConversation, type ChatConversationProps } from './chat-conversation';
 export { ChatDrawer, type ChatDrawerProps } from './chat-drawer';
+export { ChatOpening, type ChatOpeningProps } from './chat-opening';
 export { ChatInputBar, type ChatInputBarProps, type ChatInputBarRef } from './chat-input-bar';
 export { ConversationStyleOption, type ConversationStyleOptionProps } from './conversation-style-option';
 export { ConversationStylePicker, type ConversationStylePickerProps } from './conversation-style-picker';
 export { CrisisBanner, type CrisisBannerProps } from './crisis-banner';
 export { DrawerActionRow, type DrawerActionRowProps } from './drawer-action-row';
+export { LoadFailed, type LoadFailedProps } from './load-failed';
 export { MessageBubble, type MessageBubbleProps } from './message-bubble';
 export { SmartPromptChip, type SmartPromptChipProps } from './smart-prompt-chip';
 export { SmartPromptRow, type SmartPromptRowProps } from './smart-prompt-row';

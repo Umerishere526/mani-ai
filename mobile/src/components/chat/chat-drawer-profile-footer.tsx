@@ -20,7 +20,7 @@ export function ChatDrawerProfileFooter({
   gradientBottomOffset,
   paddingBottom,
 }: ChatDrawerProfileFooterProps) {
-  const displayName = nickname ?? 'User';
+  const displayName = nickname ?? en.chat.profileFallbackName;
 
   return (
     <>

@@ -102,7 +102,7 @@ class PausedBackend(mani.ManiClient):
         if path == "/v1/threads/T/messages" and method == "GET":
             return {"messages": [{"id": "g", "role": "mani", "content": "I hear you", "prompts": [{"label": "Tap me"}]}],
                     "next_cursor": None}
-        if path == "/v1/exercises":
+        if path in ("/v1/exercises", "/v1/exercises/topics"):
             return []
         raise AssertionError(f"unexpected {method} {path}")
 

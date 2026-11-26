@@ -1,5 +1,5 @@
 // ABOUTME: Admin page for creating a new prompt.
-// ABOUTME: Ported from mani-app's app/admin/prompts/new/page.tsx.
+// ABOUTME: Saving posts the prompt to the backend through the createPrompt server action.
 
 import { BackLink } from "@/components/shared";
 import { PromptForm } from "@/components/admin";

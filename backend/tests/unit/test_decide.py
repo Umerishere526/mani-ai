@@ -2,7 +2,7 @@
 # ABOUTME: finishes or is declined, and which buttons the person sees. The model's text is never touched here.
 
 from mani.chat.decide import decide, stage_of
-from mani.chat.reply import Safety, TurnReply
+from mani.chat.reply import Question, Safety, TurnReply
 from mani.chat.taps import TapEvent
 from mani.models.rows import TechniqueOutcome
 from tests.unit.frameworks import REGISTRY, THREAD, offered, running
@@ -72,13 +72,16 @@ def test_a_typed_yes_that_opens_the_first_stage_starts_the_framework():
     assert d.technique.outcome is TechniqueOutcome.ACCEPTED and d.technique.phase == "activate"
 
 
-def test_finish_before_the_last_stage_is_ignored():
+def test_finish_before_the_last_stage_opens_the_feelings_check():
+    """The client's 2026-11-17 to 11-23 tests: a framework is not continued just because steps remain."""
     d = decided(reply(action="finish", stage="dispute"), running=running("abcde", "dispute"))
-    assert d.finished == [] and d.prompts == [] and not d.retire_technique
+    assert d.technique.phase == "feelings_check" and labels(d) == ["Feel stronger", "Feel more focused", "I'm not sure yet"]
+    assert d.finished == [] and not d.retire_technique
 
 
 def test_finish_on_the_last_stage_opens_the_feelings_check_and_finishes_nothing_yet():
-    """The client's sequence document, 2026-11-18: after E, how they feel now, with her three buttons."""
+    """The client's sequence document, 2026-11-18: after E, how they feel now, with buttons that let them say it didn't
+    help (Lolly, 2026-11-23)."""
     d = decided(reply(action="finish", stage="effective"), running=running("abcde", "effective"))
     assert labels(d) == ["Feel stronger", "Feel more focused", "I'm not sure yet"] and d.technique.phase == "feelings_check"
     assert d.finished == [] and not d.retire_technique
@@ -87,7 +90,7 @@ def test_finish_on_the_last_stage_opens_the_feelings_check_and_finishes_nothing_
 def test_any_answer_to_the_feelings_check_closes_the_set_with_the_closing_buttons():
     for answer in (reply(), reply(action="finish"), reply(stage="effective")):
         d = decided(answer, running=running("abcde", "feelings_check"))
-        assert labels(d) == ["Keep Chatting", "Go to Library", "Finish for Now"] and d.finished == ["abcde"] and d.retire_technique
+        assert labels(d) == ["Continue chatting", "Visit library"] and d.finished == ["abcde"] and d.retire_technique
 
 
 def test_a_guarded_turn_leaves_the_feelings_check_open():
@@ -133,9 +136,21 @@ def test_a_guarded_turn_changes_no_framework_state():
     assert (d.technique, d.retire_technique, d.declined, d.finished, d.prompts) == (None, False, [], [], [])
 
 
-def test_library_shows_the_go_to_library_button():
+def test_library_shows_the_visit_library_button():
     d = decided(reply(action="library"))
-    assert labels(d) == ["Go to Library"] and d.prompts[0].library == "home"
+    assert labels(d) == ["Visit library"] and d.prompts[0].library == "home"
+
+
+def test_visit_library_opens_the_section_that_fits_the_conversation():
+    """LIB-3: the reply's section when it is a real one, else the one the record kept, else the front page."""
+    named = decided(reply(action="library", library="Stress"), record={"library": "Sleep"})
+    assert named.prompts[0].library == "Stress" and named.library == "Stress"
+    kept = decided(reply(action="library", library="NarcissisticDynamics"), record={"library": "Sleep"})
+    assert kept.prompts[0].library == "Sleep" and kept.library == "Sleep"
+    retired = decided(reply(action="library"), record={"library": "NarcissisticDynamics"})
+    assert retired.prompts[0].library == "home" and retired.library is None
+    closed = decided(reply(), running=running("abcde", "feelings_check"), record={"library": "Burnout"})
+    assert [(p.label, p.library) for p in closed.prompts] == [("Continue chatting", None), ("Visit library", "Burnout")]
 
 
 def test_stage_of_reads_only_the_frameworks_own_stages():
@@ -146,7 +161,7 @@ def test_stage_of_reads_only_the_frameworks_own_stages():
 def test_a_typed_reply_to_the_lead_in_gets_the_five_steps_and_the_start_buttons():
     """muhammad, 2026-11-18: most people type an answer to the lead-in's question; it gets the reply, then the steps."""
     d = decided(reply(), open_offer=offered("abcde"), count_after=6)
-    assert d.show_steps.id == "abcde" and labels(d) == ["Start ABCDE", "I need an example", "Talk more first"]
+    assert d.show_steps.id == "abcde" and labels(d) == ["Start ABCDE", "Talk more first"]
     assert d.technique.outcome is TechniqueOutcome.OFFERED and d.technique.phase == "steps" and d.declined == []
 
 
@@ -193,3 +208,18 @@ def test_a_correction_inside_a_set_still_moves_the_stage():
 def test_the_floor_never_closes_an_offer_already_made():
     d = decided(reply(), open_offer=offered("abcde"), count_after=6, person_messages=1)
     assert d.show_steps.id == "abcde"
+
+
+def test_a_wish_to_stop_stops_the_set_and_shows_the_close():
+    """R95: a typed "I'm done" is respected."""
+    done = Question(latest="wants_to_stop")
+    d = decided(reply(question=done, stage="belief"), running=running("abcde", "activate"))
+    assert labels(d) == ["Continue chatting", "Visit library"] and d.declined == ["abcde"]
+    assert d.technique.outcome is TechniqueOutcome.DECLINED and d.technique.phase is None
+    open_chat = decided(reply(question=done, action="offer", framework="abcde"))
+    assert open_chat.technique is None and labels(open_chat) == ["Continue chatting", "Visit library"]
+
+
+def test_a_wish_to_stop_on_a_guarded_turn_changes_nothing():
+    d = decided(reply(question=Question(latest="wants_to_stop")), guarded=True)
+    assert d.prompts == []

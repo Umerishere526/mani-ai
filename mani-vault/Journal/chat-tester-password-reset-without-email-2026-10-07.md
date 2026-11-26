@@ -3,6 +3,7 @@ apps: [chat-tester, backend]
 tags: [journal, chat-tester, auth, supabase]
 summary: "The chat-tester resets a password on the page through the Auth Admin API with no email; the page must stay non-public."
 ---
+> Superseded 2026-11-24 — the on-page reset is removed; see backend/PORT-STATUS.md (the chat-tester has no password reset)
 
 # chat-tester resets a password on the page, no email
 

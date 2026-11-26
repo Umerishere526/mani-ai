@@ -8,7 +8,6 @@ import asyncio
 import datetime as dt
 import json
 import pathlib
-import re
 import statistics
 import sys
 import time
@@ -19,9 +18,12 @@ import httpx  # noqa: E402
 from openai.lib._pydantic import to_strict_json_schema  # noqa: E402
 from pydantic import BaseModel, Field  # noqa: E402
 
-from mani.chat.facts import facts_block, framework_guide  # noqa: E402
+from evals import reply_rules  # noqa: E402
+from mani.chat import crisis, questions, repairs  # noqa: E402
+from mani.chat.enforce import banned_phrases, forbidden_words  # noqa: E402
+from mani.chat.facts import NO_OFFER, facts_block, framework_guide  # noqa: E402
 from mani.chat.greeting import style_label  # noqa: E402
-from mani.chat.reply import TurnReply  # noqa: E402
+from mani.chat.reply import shaped  # noqa: E402
 from mani.config import get_settings  # noqa: E402
 from mani.llm import chain, client  # noqa: E402
 from mani.db import pool  # noqa: E402
@@ -34,8 +36,9 @@ CRITERIA = {
     "understanding": "Shows it understood what is really at stake for them, and adds something they did not say.",
     "no_assumptions": "Invites their story before concluding; never assumes a cause, a feeling or that there is no reason.",
     "ideas": "Gives ideas to explore: a fair perspective, a distinction, something highlighted, permission, both feelings.",
-    "question": "Ends on one good question: open, or options each with a reason. Not a thin either-or, not a fact-check.",
-    "voice": "Warm, plain everyday words, no therapy talk, no lecture, no solutions or advice, no emojis.",
+    "question": ("Asks a question only when it helps, and never more than one: open, or options each with a reason. "
+                 "Not a thin either-or, not a fact-check. A reply that rightly asks nothing is not marked down."),
+    "voice": "Warm, plain everyday words, no therapy talk, no lecture, no advice they did not ask for, no emojis.",
     "overall": "Compared with the reference reply: 5 = as good or better, 3 = clearly weaker, 1 = much worse.",
 }
 
@@ -68,6 +71,10 @@ def variant(spec: str) -> dict:
 IN_FLIGHT_WAITS = 6
 
 
+class OutOfCredits(RuntimeError):
+    """OpenRouter refused a call because the account's credit cannot cover it."""
+
+
 async def post(http, settings, body) -> tuple[dict, float]:
     began = time.monotonic()
     attempt = waits = 0
@@ -88,56 +95,104 @@ async def post(http, settings, body) -> tuple[dict, float]:
             waits += 1
             await asyncio.sleep(float(r.headers.get("retry-after") or 5))
             continue
+        if r.status_code == 402:
+            # The account's credit is spent: every further call would fail the same way, so the run ends here.
+            raise OutOfCredits(f"{body['model']}: {r.text[:200]}")
         attempt += 1
         if attempt == 3:
             raise RuntimeError(f"{body['model']}: {r.status_code} {r.text[:300]}")
         await asyncio.sleep(2 * attempt)
 
 
-async def reply(http, settings, v, system, case) -> dict:
-    """One reply, sent as the turn sends it: the same request fields beside the messages (chain.request_body and
-    chain.sampling), and the facts in the turn's own format."""
+def reply_schema(case, offers: tuple[str, ...]) -> type:
+    """The reply's schema as the turn chooses it from the case's facts: no offer when they say none may be made,
+    otherwise the active sets (`offers`) they name no decline of."""
+    if NO_OFFER in case["facts"]:
+        return shaped(())
+    declined = " ".join(fact for fact in case["facts"] if fact.startswith("They declined"))
+    return shaped(tuple(framework_id for framework_id in offers if framework_id not in declined))
+
+
+async def reply(http, settings, v, system, case, offers: tuple[str, ...]) -> dict:
+    """One reply, sent as the turn sends it: the same request fields and reply schema beside the messages
+    (chain.request_body, chain.sampling and reply_schema), and the facts in the turn's own format."""
     facts = facts_block([f"Their style: {style_label(case['style'])}.", *case["facts"]])
     parameters = v["parameters"]
     body = {"model": v["model"], "messages": [{"role": "system", "content": system},
                                               {"role": "assistant", "content": case["opener"]}]
-            + case["turns"] + [{"role": "system", "content": facts}],
+            + turns(case, settings) + [{"role": "system", "content": facts}],
             "response_format": {"type": "json_schema", "json_schema": {
-                "name": "reply", "strict": True, "schema": to_strict_json_schema(TurnReply)}},
+                "name": "reply", "strict": True, "schema": to_strict_json_schema(reply_schema(case, offers))}},
             **chain.sampling(v["model"], parameters.get("temperature", client.DEFAULT_TEMPERATURE),
                              parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS)),
             **chain.request_body(v["model"], settings, v["routing"], v["effort"])}
     try:
         raw, took = await post(http, settings, body)
         out = json.loads(raw["choices"][0]["message"]["content"])
-        return {**out, "seconds": round(took, 1), "cost": (raw.get("usage") or {}).get("cost")}
+        sent, cut = received(case, out)
+        return {**out, "sent": sent, "question_cut": cut, "seconds": round(took, 1),
+                "cost": (raw.get("usage") or {}).get("cost")}
     except Exception as error:  # noqa: BLE001
-        return {"error": str(error)[:300], "text": "", "seconds": None, "cost": None}
+        return {"error": str(error)[:300], "text": "", "sent": "", "seconds": None, "cost": None}
+
+
+# The lines code writes in a conversation, which a case names by `fixed` in its turns so that what it shows is what the
+# person was sent under the settings in force.
+FIXED = {
+    "pause": lambda turn, settings: crisis.pause_reply(turn.get("about"), settings.crisis_pause_seconds),
+    "return_check": lambda turn, settings: crisis.RETURN_CHECK_REPLY,
+}
+
+
+def turns(case, settings) -> list[dict]:
+    """The case's conversation, with each line code writes in its words under these settings."""
+    return [{"role": turn["role"], "content": FIXED[turn["fixed"]](turn, settings)} if "fixed" in turn else turn
+            for turn in case["turns"]]
+
+
+# How the facts say a safety worry is open (facts.facts), which holds the turn.
+SAFETY_WORRY_OPEN = "A safety worry is open in this conversation"
+
+
+def received(case, got) -> tuple[str, str | None]:
+    """The reply's words as the person would receive them, through the turn's own repairs, and why a question was cut.
+    A case whose facts put a set, an offer or a safety worry in play says `open_chat` false. A safety worry open in its
+    facts guards the turn, and so does this reply's own safety judgment, as it would out of a clear conversation."""
+    guarded = (any(fact.startswith(SAFETY_WORRY_OPEN) for fact in case.get("facts", []))
+               or (got.get("safety") or {}).get("level", "none") != "none")
+    open_chat = case.get("open_chat", True) and questions.in_open_chat(
+        in_play=False, guarded=guarded, action=got.get("action", "none"))
+    question = got.get("question") or {}
+    sent, _asked, cut = repairs.sent_text(got.get("text") or "", question.get("ask", ""), guarded=guarded,
+                                          open_chat=open_chat, latest=question.get("latest", ""))
+    return sent, cut
 
 
 async def judge(http, settings, case, got) -> dict:
-    convo = "\n\n".join(f"{t['role'].upper()}: {t['content']}" for t in case["turns"])
+    convo = "\n\n".join(f"{t['role'].upper()}: {t['content']}" for t in turns(case, settings))
     rubric = "\n".join(f"- {k}: {v}" for k, v in CRITERIA.items())
     if case["reference"] is not None:
         prompt = (f"You are judging a reply from MANI, a supportive chat companion, against a reference reply.\n\n"
                   f"Conversation so far (the person chose the {case['style']} style):\n\n{convo}\n\n"
-                  f"REFERENCE REPLY:\n{case['reference']}\n\nCANDIDATE REPLY:\n{got['text']}\n\n"
+                  f"REFERENCE REPLY:\n{case['reference']}\n\nCANDIDATE REPLY:\n{got['sent']}\n\n"
                   f"Score the candidate 1-5 on each criterion. Judge quality, not similarity of wording. "
                   f"Length alone is neither good nor bad.{SHORT_BY_DESIGN if case['style'] == 'Directive' else ''}"
                   f"\n{rubric}")
         schema = Score
     else:
-        prompt = (f"Conversation so far:\n\n{convo}\n\nREPLY:\n{got['text']}\n\nRule: {case['checks']['judge']}\n"
+        prompt = (f"Conversation so far:\n\n{convo}\n\nREPLY:\n{got['sent']}\n\nRule: {case['checks']['judge']}\n"
                   f"Does the reply pass the rule?")
         schema = RuleVerdict
     return await structured(http, settings, JUDGE_MODEL, [{"role": "user", "content": prompt}], schema)
 
 
-async def structured(http, settings, model: str, messages: list[dict], schema: type[BaseModel]) -> dict:
-    """A call the evaluation makes for itself (the judge, the model-played person), straight to OpenRouter at effort
-    low: never recorded as a chat call, and never on the chat's priority tier."""
-    # A set output budget keeps OpenRouter's hold for the call small; a verdict at effort low fits well inside it.
-    body = {"model": model, "reasoning": {"effort": "low"}, "max_tokens": 2000, "messages": messages,
+async def structured(http, settings, model: str, messages: list[dict], schema: type[BaseModel], *,
+                     effort: str = "low") -> dict:
+    """A call the evaluation makes for itself (the judge, the model-played person), straight to OpenRouter at
+    `effort`: never recorded as a chat call, and never on the chat's priority tier."""
+    # A set output budget keeps OpenRouter's hold for the call small; a ten-criterion verdict with its quotes runs past
+    # 2000 tokens (5 of 10 verdicts were cut off on 2026-11-25), so the budget is 8000.
+    body = {"model": model, "reasoning": {"effort": effort}, "max_tokens": 8000, "messages": messages,
             "response_format": {"type": "json_schema", "json_schema": {
                 "name": schema.__name__.lower(), "strict": True, "schema": to_strict_json_schema(schema)}}}
     raw, _ = await post(http, settings, body)
@@ -151,19 +206,19 @@ SHORT_BY_DESIGN = (" In this style short replies are the aim: never count shortn
 GATED_STYLES = ("Supportive", "Reflective")
 
 
-# A sentence ends at . ? or ! (with any closing quote) when a capital letter or the end of the text follows, so a
-# question quoted inside a sentence ('He said "why me?" and left') does not end it.
-SENTENCE_END = re.compile(r"[.?!]+[\"'”’)]*(?=\s+[\"“‘(]?[A-Z]|\s*$)")
-
-
-def sentences(text: str) -> int:
-    return sum(1 for piece in SENTENCE_END.split(text.strip()) if piece.strip())
-
-
 def rule_checks(case, got) -> list[str]:
-    """What code can check from the reply's fields; empty when it passes."""
-    failed, checks, text = [], case["checks"], got.get("text") or ""
-    if "max_sentences" in checks and (count := sentences(text)) > checks["max_sentences"]:
+    """What code can check from the reply's fields and the words the person receives; empty when it passes. The client's
+    forbidden words and banned lines are checked on every rule case (approved by muhammad, 2026-11-24)."""
+    failed, checks, text = [], case["checks"], got.get("sent") or ""
+    failed += [f"used forbidden {word!r}" for word in forbidden_words(text)]
+    failed += [f"said banned {line!r}" for line in banned_phrases(text)]
+    if "max_questions" in checks and (count := len(reply_rules.questions(text))) > checks["max_questions"]:
+        failed.append(f"{count} questions > {checks['max_questions']}")
+    if checks.get("no_invented_pronoun"):
+        said = " ".join(t.get("content", "") for t in case["turns"] if t["role"] == "user")
+        failed += [f"said {g!r} before the person did"
+                   for g in sorted(reply_rules.pronouns(text) - reply_rules.genders_named(said))]
+    if "max_sentences" in checks and (count := len(questions.sentences(text))) > checks["max_sentences"]:
         failed.append(f"{count} sentences > {checks['max_sentences']}")
     words = len(text.split())
     if "max_words" in checks and words > checks["max_words"]:
@@ -189,10 +244,10 @@ def rule_checks(case, got) -> list[str]:
     return failed
 
 
-async def run_variant(http, settings, system, v, cases, samples, gate) -> list[dict]:
+async def run_variant(http, settings, system, v, cases, samples, gate, offers) -> list[dict]:
     async def one(case, n):
         async with gate:
-            got = await reply(http, settings, v, system, case)
+            got = await reply(http, settings, v, system, case, offers)
             if got.get("error"):
                 return {"case": case["id"], "style": case["style"], "sample": n, "got": got, "verdict": None,
                         "code_fails": ["call failed"]}
@@ -266,14 +321,15 @@ async def main() -> None:
     report = [f"# Eval {args.label}", "", f"Prompt: `{args.prompt}`. Samples per case: {args.samples}. "
               f"Judge: `{JUDGE_MODEL}`.", ""]
     async with httpx.AsyncClient() as http:
-        results = await asyncio.gather(*(run_variant(http, settings, system, v, every, args.samples, gate)
+        results = await asyncio.gather(*(run_variant(http, settings, system, v, every, args.samples, gate,
+                                                     tuple(config.registry.ids))
                                          for v in args.variant))
     for v, rows in zip(args.variant, results):
         report += summarise(f"{v['name']} (`{v['model']}`, effort {v['effort']})", rows)
         (out_dir / f"{v['name']}.json").write_text(json.dumps(rows, indent=1, ensure_ascii=False))
         side = [f"# {v['name']}", ""]
         for r in rows:
-            side += [f"## {r['case']} #{r['sample']}", "", r["got"].get("text") or r["got"].get("error", ""), "",
+            side += [f"## {r['case']} #{r['sample']}", "", r["got"].get("sent") or r["got"].get("error", ""), "",
                      f"_verdict: {json.dumps(r['verdict'], ensure_ascii=False)}_", ""]
         (out_dir / f"{v['name']}-replies.md").write_text("\n".join(side))
     (out_dir / "report.md").write_text("\n".join(report))

@@ -78,26 +78,26 @@ def verify_token(token: str, settings: Settings | None = None) -> Claims:
 
     try:
         if settings.supabase_jwt_secret:
-            payload = jwt.decode(
-                token,
-                settings.supabase_jwt_secret,
-                algorithms=SYMMETRIC_ALGORITHMS,
-                audience=AUDIENCE,
-                options={"require": ["exp", "sub"]},
-            )
+            key, algorithms = settings.supabase_jwt_secret, SYMMETRIC_ALGORITHMS
         else:
-            signing_key = _jwks_client(settings.jwks_url, settings.jwks_timeout_seconds).get_signing_key_from_jwt(token)
-            payload = jwt.decode(
-                token,
-                signing_key.key,
-                algorithms=ASYMMETRIC_ALGORITHMS,
-                audience=AUDIENCE,
-                options={"require": ["exp", "sub"]},
-            )
+            key = _jwks_client(settings.jwks_url, settings.jwks_timeout_seconds).get_signing_key_from_jwt(token).key
+            algorithms = ASYMMETRIC_ALGORITHMS
+        # The issuer pins a token to this project's Auth server, so a token another Supabase project
+        # signed with a key or secret this one also trusts is refused.
+        payload = jwt.decode(
+            token,
+            key,
+            algorithms=algorithms,
+            audience=AUDIENCE,
+            issuer=settings.jwt_issuer,
+            options={"require": ["exp", "sub", "iss"]},
+        )
     except jwt.ExpiredSignatureError as exc:
         raise _unauthorized("token expired") from exc
     except jwt.InvalidAudienceError as exc:
         raise _unauthorized("token is for a different audience") from exc
+    except jwt.InvalidIssuerError as exc:
+        raise _unauthorized("token is from a different issuer") from exc
     except jwt.PyJWTError as exc:
         # Covers a bad signature, a malformed token, and a missing required claim.
         raise _unauthorized(f"token rejected: {exc}") from exc

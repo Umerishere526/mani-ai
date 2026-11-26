@@ -13,13 +13,13 @@ from dataclasses import dataclass, field
 import asyncpg
 
 from mani.auth.jwt import Claims
-from mani.chat import crisis, decide as decide_mod, facts, pause, questions, record as rec, rewind, safety, taps, worry
+from mani.chat import crisis, decide as decide_mod, enforce, facts, pause, questions, record as rec, rewind, safety, taps, worry
 from mani.chat.greeting import (
     COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
-from mani.chat.repairs import clean_title, start_buttons, without_dashes
-from mani.chat.reply import TurnReply
-from mani.chat.techniques import FEELINGS, OFFERING, STEPS, example_text, steps_text
+from mani.chat.repairs import clean_title, start_buttons
+from mani.chat.reply import TurnReply, shaped
+from mani.chat.techniques import FEELINGS, OFFERING, STEPS, steps_text
 from mani.config import get_settings
 from mani.text import copies_last_reply
 from mani.db import llm_calls, messages as messages_db, pauses, profiles, threads
@@ -36,9 +36,6 @@ logger = logging.getLogger(__name__)
 Ask = Callable[..., Awaitable[client.Call | None]]
 # A title is asked for once the thread has a real exchange behind it.
 TITLE_AFTER_MESSAGES = 3
-# The trace and the call link are written once the turn's message is committed, which happens after the response.
-LINK_RETRY_ATTEMPTS = 5
-LINK_RETRY_DELAY_SECONDS = 0.05
 
 
 @dataclass(frozen=True)
@@ -138,7 +135,19 @@ async def _turn(
     if ctx is None:
         raise ServiceError(f"thread {thread_id} not found for user {claims.user_id}", ErrorCategory.NOT_FOUND,
                            user_message="That conversation is not available.")
+    turn = await _respond(conn, claims, ctx, content, client_message_id, ask=ask, config=config,
+                          answer_failure=answer_failure, settings=settings)
+    # Saved once the turn is written, from the context it started on. A turn that asks the model ends its read at
+    # the ask and rolls back, so the snapshot is written only by the pass that keeps it.
     await rewind.save(conn, ctx, claims.user_id)
+    return turn
+
+
+async def _respond(
+    conn: asyncpg.Connection, claims: Claims, ctx, content: str, client_message_id, *, ask: Ask,
+    config: cache.Config, answer_failure: bool, settings,
+) -> Turn:
+    thread_id = ctx.thread.id
     window = await messages_db.for_context(conn, thread_id, claims.user_id,
                                            budget_chars=settings.context_budget_chars)
     history = window.messages
@@ -166,9 +175,6 @@ async def _turn(
     # A held turn (an open worry, or the question owed after a pause) goes to the model, never to a fixed step.
     if tap.explain is not None and not holding:
         return await _explained(conn, ctx, content, tap.explain, style_name, tapped, client_message_id)
-    if tap.example is not None and not holding:
-        return await _fixed_step(conn, ctx, content, example_text(tap.example),
-                                 start_buttons(tap.example, with_example=False), tapped, client_message_id)
     last_reply = next((m.content for m in reversed(history) if m.role is MessageRole.MANI), None)
     if tapped is None and not holding and copies_last_reply(content, last_reply):
         return await _copied_back(conn, ctx, content, client_message_id)
@@ -180,19 +186,27 @@ async def _turn(
     end_check_asked = rec.end_check(record) == rec.END_CHECK_ASKED
     # The question after a framework's last stage holds the turn too, but its answer may close the set.
     held = holding and not end_check_asked
+    told_running = running if held or not tap.starting else None
+    told_offer = (open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
+                  else None)
+    # Show me how's own fact replaces what the lead-in says comes next; on a held turn the tap's fact is not said.
     told = facts.facts(
-        ctx, config, record=record, style=style_name, running=running if held or not tap.starting else None,
-        open_offer=open_offer if open_offer is None or decide_mod.offer_current(open_offer, ctx.thread.message_count)
-        else None, event=facts.HELD_START if held and tap.starting else tap.fact, wants_title=wants_title,
+        ctx, config, record=record, style=style_name, running=told_running,
+        open_offer=told_offer if tap.demonstrate is None else None,
+        event=(facts.HELD_START if tap.starting else None) if held and (tap.starting or tap.demonstrate) else tap.fact,
+        wants_title=wants_title,
         return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, state=before,
         person_messages=person_messages,
     )
+    # The schema offers only what the facts allow, so a reply code already knows it would refuse is never written.
+    shape = shaped(facts.offerable(config, record=record, running=told_running, open_offer=told_offer, holding=held,
+                                   person_messages=person_messages, state=before))
     model, parameters, routing = composer.model_settings(config, "mani")
     call = await ask(
         [{"role": "system", "content": facts.system_prompt(config, ctx, summary_due=bool(window.dropped))}]
         + conversation(history)
         + [{"role": "user", "content": content}, {"role": "system", "content": told}],
-        TurnReply, model=model, purpose=llm_calls.Purpose.CHAT,
+        shape, model=model, purpose=llm_calls.Purpose.CHAT,
         temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
         max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
         reasoning_effort=parameters.get("reasoning_effort"), routing=routing, user_id=claims.user_id,
@@ -221,6 +235,8 @@ async def _apply(
     # answer that settles the safety question after a framework's last stage: that one carries the close.
     settles_end_check = end_check_asked and judgment.state is safety.State.CLEAR
     guarded = (holding or judgment.state is not safety.State.CLEAR) and not settles_end_check
+    # A typed wish to stop is read as one, so the close follows with no question (R95).
+    reply, enforced = enforce.read_stop(reply, content, guarded=guarded)
     decision = decide_mod.decide(
         reply, config.registry, thread_id=ctx.thread.id, running=running, open_offer=open_offer, tap=tap,
         record=record, guarded=guarded,
@@ -228,24 +244,39 @@ async def _apply(
         end_check_due=bool(record.get(rec.DANGER_REACHED)) and rec.end_check(record) != rec.END_CHECK_DONE,
         end_check_asked=end_check_asked, person_messages=person_messages,
     )
+    ask = ""
     if judgment.pausing:
-        # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20).
+        # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20). A question it chose
+        # that its text already asks is not asked twice.
+        repeated = enforce.repeats(reply.text, reply.question.ask)
+        enforced += [enforce.REPEATED_QUESTION] if repeated else []
         text = "\n\n".join(part for part in (
-            reply.text.strip(), crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
+            reply.text.strip(), "" if repeated else reply.question.ask.strip(),
+            crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
     elif decision.end_check:
         text = crisis.END_CHECK
     elif check is not None:
         text = crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger" else crisis.RETURN_CHECK_REPLY
     else:
-        text = reply.text
-    # The open chat, with no set, offer or safety worry in play: there code holds the reply to one question, and none
-    # after frustration, and keeps the question it asked. A stage's question, a lead-in and a safety question are left.
-    open_chat = (running is None and open_offer is None and decision.technique is None and not guarded
-                 and reply.action in ("none", "library"))
-    cut = None
-    if open_chat:
-        text, cut = questions.held_to_one(text, reply.question.latest)
-    text = without_dashes(text).strip()
+        text, ask = reply.text, reply.question.ask
+    # Every reply asks one question at most, its own, after its text; a guarded turn's words lose nothing. The open
+    # chat, with no set, offer or safety worry in play, asks none after frustration and keeps the question it asked.
+    # An offer code refused leaves the reply in the open chat: no buttons follow its lead-in.
+    open_chat = questions.in_open_chat(
+        in_play=running is not None or open_offer is not None or decision.technique is not None, guarded=guarded,
+        action="none" if decision.refused == "offer" else reply.action)
+    # A reply at the offer, its lead-in or the reply its five steps follow, begins no stage (RF-1).
+    offered = decision.show_steps or (config.registry.get(reply.framework) if decision.technique is not None
+                                      and decision.technique.phase == OFFERING else None)
+    sent = enforce.sent(text, ask, fixed=judgment.pausing or decision.end_check or check is not None,
+                        guarded=guarded, open_chat=open_chat, latest=reply.question.latest,
+                        directive=style == SupportStyle.DIRECTIVE, helping=reply.said.move.strip().lower() == "help",
+                        openers=[entry.get("opens", "") for entry in rec.replies(record)], offered=offered,
+                        stage=reply.stage, earlier=[m.content for m in window.messages if m.role is MessageRole.MANI])
+    text, asked, cut = sent.text, sent.asked, sent.cut
+    enforced += sent.enforced
+    # What the reply asked and gave, kept before code adds its own pieces; the fixed words for an empty reply give none.
+    entry = _ledger_entry(reply, text, asked, open_chat=open_chat) if text else None
     if not text and not answer_failure:
         raise ServiceError(f"reply on thread {ctx.thread.id} was empty", ErrorCategory.LLM_UNAVAILABLE, retryable=True,
                            user_message="Mani had trouble responding. Please try again.")
@@ -263,8 +294,7 @@ async def _apply(
         text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
     updates, after = _updates(ctx, reply, decision, judgment, record=record, check=check, answering=answering,
-                              end_check_asked=end_check_asked, wants_title=wants_title,
-                              asked=questions.asked_in(text) if open_chat else None)
+                              end_check_asked=end_check_asked, wants_title=wants_title, entry=entry)
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, text, selected_prompt=tapped.label if tapped else None,
         prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts] or None,
@@ -278,8 +308,9 @@ async def _apply(
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
         "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
-        "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "refused": decision.refused,
-        "question_cut": cut, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
+        "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "first_token_ms": call.first_token_ms,
+        "refused": decision.refused,
+        "question_cut": cut, "enforced": enforced, "reply_checked": list(call.checked) or None, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
         "notes": reply.notes if settings.ai_debug_mode else None,
     }.items() if value not in (None, "", [], {})}
     return Turn(
@@ -288,18 +319,38 @@ async def _apply(
         paused_from=paused.started_at if paused else None, paused_until=paused.ends_at if paused else None,
         was_duplicate=pair.was_duplicate, needs_summary=_summary_due(ctx, window) and not judgment.pausing,
         llm_call_id=call.call_id, understanding=after if settings.ai_debug_mode else None, trace=trace,
-        raw_reply=reply.model_dump(mode="json") if settings.ai_debug_mode else None,
+        raw_reply=call.value.model_dump(mode="json") if settings.ai_debug_mode else None,
     )
 
 
+def _ledger_entry(reply: TurnReply, text: str, asked: str, *, open_chat: bool) -> dict:
+    """What the reply asked and gave, as rec.with_reply takes it: the question it sent with its job (in a set, the stage
+    it asks), whether it was in the open chat, its move and gist, and its text."""
+    intent = reply.question.intent.strip().lower()
+    if not asked:
+        intent = "none"
+    elif reply.stage and not open_chat:
+        intent = reply.stage
+    elif intent not in questions.INTENTS:
+        intent = "unsaid"
+    return {"question": asked, "intent": intent, "open_chat": open_chat, "move": reply.said.move,
+            "gist": reply.said.gist, "text": text}
+
+
 def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answering, end_check_asked,
-             wants_title, asked: list[str] | None) -> tuple[threads.ThreadUpdates, dict]:
-    """The thread's changes and its record after this turn. `asked`: the questions an open-chat reply sent, else None."""
-    after = rec.with_outcomes(record, notes=reply.notes, declined=decision.declined, finished=decision.finished)
-    if asked is not None:
-        intent = reply.question.intent.strip().lower()
-        after = rec.with_question(after, asked[-1] if asked else "",
-                                  (intent if intent in questions.INTENTS else "unsaid") if asked else "none")
+             wants_title, entry: dict | None) -> tuple[threads.ThreadUpdates, dict]:
+    """The thread's changes and its record after this turn. `entry`: what the reply asked and gave, None when the
+    fixed words went out in its place."""
+    after = rec.with_outcomes(record, notes=reply.notes, people=[p.model_dump() for p in reply.people],
+                              events=[e.model_dump() for e in reply.events], declined=decision.declined,
+                              finished=decision.finished, library=decision.library)
+    after = rec.with_answer(after, reply.question.answered)
+    if pending := reply.request_open.strip()[:rec.REQUEST_CHARS]:
+        after[rec.PENDING_REQUEST] = pending
+    else:
+        after.pop(rec.PENDING_REQUEST, None)
+    if entry is not None:
+        after = rec.with_reply(after, **entry)
     after = worry.record_after(after, judgment, check=check, answering=answering)
     updates = threads.ThreadUpdates()
     if judgment.state.value != ctx.thread.safety:
@@ -382,10 +433,10 @@ async def _arrival(conn, claims: Claims, thread_id, client_message_id) -> Turn |
 
 
 async def _explained(conn, ctx, content, framework: Framework, style: str, tapped, client_message_id) -> Turn:
-    """A lead-in button: the client's five steps for their style, word for word, with no model call. The offer moves
-    to its steps, where the next answer starts it, sets it aside or lets it lapse."""
+    """Not sure: the client's five steps for their style, word for word, with no model call. The offer moves to its
+    steps, where the next answer starts it, sets it aside or lets it lapse."""
     turn = await _fixed_step(conn, ctx, content, steps_text(framework, style),
-                             start_buttons(framework, with_example=True), tapped, client_message_id)
+                             start_buttons(framework), tapped, client_message_id)
     if not turn.was_duplicate and ctx.technique is not None:
         await threads.apply(conn, ctx.thread.id, ctx.thread.user_id,
                             threads.ThreadUpdates(technique=ctx.technique.model_copy(update={"phase": STEPS})))
@@ -393,7 +444,7 @@ async def _explained(conn, ctx, content, framework: Framework, style: str, tappe
 
 
 async def _fixed_step(conn, ctx, content, text: str, prompts: list[SmartPrompt], tapped, client_message_id) -> Turn:
-    """One of the client's fixed offer steps (the five steps, the example), sent with its buttons and no model call."""
+    """One of the client's fixed offer steps (the five steps), sent with its buttons and no model call."""
     pair = await messages_db.create_pair(
         conn, ctx.thread.id, content, text, selected_prompt=tapped.label,
         prompt_options=[p.model_dump(mode="json", exclude_none=True) for p in prompts],
@@ -494,33 +545,28 @@ async def has_written_in_earlier_thread(conn: asyncpg.Connection, user_id: str, 
 
 
 async def record_trace(turn: Turn, thread_id: uuid.UUID | str) -> None:
-    """Store the turn's trace once its message is committed. A trace that cannot be stored costs a review, never a
+    """Store the turn's trace beside its committed message. A trace that cannot be stored costs a review, never a
     reply."""
     from mani.db import turn_traces
 
-    await _once_committed(lambda conn: turn_traces.record(
+    await _stored_or_logged(lambda conn: turn_traces.record(
         conn, thread_id=thread_id, message_id=turn.message_id, llm_call_id=turn.llm_call_id, trace=turn.trace,
         raw_reply=turn.raw_reply), f"the trace for message {turn.message_id}")
 
 
 async def link_call(call_id: uuid.UUID, message_id: uuid.UUID) -> None:
-    """Point a recorded model call at the message it produced, once that message is committed."""
-    await _once_committed(lambda conn: llm_calls.attach_message(conn, call_id, message_id),
-                          f"the link from llm call {call_id} to message {message_id}")
+    """Point a recorded model call at the committed message it produced."""
+    await _stored_or_logged(lambda conn: llm_calls.attach_message(conn, call_id, message_id),
+                            f"the link from llm call {call_id} to message {message_id}")
 
 
-async def _once_committed(write: Callable[[asyncpg.Connection], Awaitable[None]], what: str) -> None:
-    """An admin write that needs the turn's message committed, retried while the commit lands. One that never
-    succeeds is logged and swallowed."""
+async def _stored_or_logged(write: Callable[[asyncpg.Connection], Awaitable[None]], what: str) -> None:
+    """An admin write about a turn whose message is already committed (chat/runner.py commits before the route
+    responds). One that fails is logged and swallowed: it costs a record, never a delivered reply."""
     from mani.db import pool
 
-    for attempt in range(1, LINK_RETRY_ATTEMPTS + 1):
-        try:
-            async with pool.as_admin() as conn:
-                await write(conn)
-            return
-        except asyncpg.PostgresError:
-            if attempt == LINK_RETRY_ATTEMPTS:
-                logger.warning("could not store %s after %d attempts", what, LINK_RETRY_ATTEMPTS, exc_info=True)
-                return
-            await asyncio.sleep(LINK_RETRY_DELAY_SECONDS * attempt)
+    try:
+        async with pool.as_admin() as conn:
+            await write(conn)
+    except asyncpg.PostgresError:
+        logger.warning("could not store %s", what, exc_info=True)

@@ -3,7 +3,8 @@
 
 import { Pressable } from 'react-native';
 import { CardGradient, Text } from '@/components/shared';
-import { formatDuration } from '@/lib/utils';
+import { exerciseAccessibilityLabel, exerciseMeta } from '@/lib/utils';
+import en from '@/dictionaries/en.json';
 import type { Exercise } from '@/types/exercise';
 import type { ResponsiveTypography } from '@/hooks/useResponsiveTypography';
 
@@ -19,15 +20,15 @@ export function HomeExerciseCard({ exercise, typography, onPress }: HomeExercise
       onPress={() => onPress(exercise.id)}
       className="w-[85%] overflow-hidden rounded-lg px-4 pb-4 pt-4 active:opacity-90"
       accessibilityRole="button"
-      accessibilityLabel={`${exercise.title}, ${formatDuration(exercise.durationMinutes)}, ${exercise.type}`}
-      accessibilityHint="Tap to start this exercise"
+      accessibilityLabel={exerciseAccessibilityLabel(exercise)}
+      accessibilityHint={en.home.exerciseCardHint}
     >
       <CardGradient />
       <Text
         className="text-xs text-white/60"
         style={{ marginBottom: typography.homeCard.metaMarginBottom }}
       >
-        {formatDuration(exercise.durationMinutes)} • {exercise.type}
+        {exerciseMeta(exercise).join(' • ')}
       </Text>
       <Text className="font-sans-semibold text-white" style={{ fontSize: typography.homeCard.titleFontSize }}>
         {exercise.title}

@@ -1,4 +1,5 @@
-// ABOUTME: The "verify the code we sent" phase of ChangeEmailScreen.
+// ABOUTME: The "verify the code we sent" phase of ChangeEmailScreen — the 6-digit code
+// ABOUTME: field, Verify, and the resend / wrong-email links.
 
 import { useRef } from "react";
 import { Pressable, View, type TextInput as RNTextInput } from "react-native";
@@ -59,10 +60,10 @@ export function VerifyOtpForm({
       />
 
       <View className="mt-6 flex-row justify-between">
-        <Pressable onPress={onResend} accessibilityRole="button" accessibilityLabel={en.changeEmail.resendCodeLabel}>
+        <Pressable onPress={onResend} hitSlop={12} accessibilityRole="button" accessibilityLabel={en.changeEmail.resendCodeLabel}>
           <Text className="font-sans-medium text-sm text-secondary-500/70">{en.changeEmail.resendCode}</Text>
         </Pressable>
-        <Pressable onPress={onWrongEmail} accessibilityRole="button" accessibilityLabel={en.changeEmail.wrongEmailLabel}>
+        <Pressable onPress={onWrongEmail} hitSlop={12} accessibilityRole="button" accessibilityLabel={en.changeEmail.wrongEmailLabel}>
           <Text className="font-sans-medium text-sm text-secondary-500/70">{en.changeEmail.wrongEmail}</Text>
         </Pressable>
       </View>

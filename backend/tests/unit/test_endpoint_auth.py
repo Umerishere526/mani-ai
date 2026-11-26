@@ -3,6 +3,7 @@
 
 import datetime as dt
 import uuid
+from collections.abc import Iterator
 
 import jwt
 import pytest
@@ -32,22 +33,24 @@ def _token(secret: str, **claims) -> str:
         "sub": USER,
         "aud": AUDIENCE,
         "role": AUDIENCE,
+        "iss": get_settings().jwt_issuer,
         "exp": dt.datetime.now(dt.UTC) + dt.timedelta(hours=1),
     } | claims
     return jwt.encode(payload, secret, algorithm="HS256")
 
 
 @pytest.fixture
-def secret() -> str:
-    """The secret the app is actually configured with, so a minted token really verifies.
+def secret(monkeypatch) -> Iterator[str]:
+    """A throwaway secret the app is configured with for this test, so a minted token really verifies.
 
-    Skips rather than passing vacuously when the project is configured for JWKS instead -
-    a token signed with a secret nobody checks would prove nothing.
+    Whatever .env names - a secret, a JWKS URL or nothing - these tests run, rather than skipping
+    silently on a project that signs with a key set.
     """
-    configured = get_settings().supabase_jwt_secret
-    if not configured:
-        pytest.skip("project is configured for JWKS; cannot mint a symmetric token")
-    return configured
+    throwaway = "throwaway-hs256-secret-for-the-endpoint-auth-tests"
+    monkeypatch.setenv("SUPABASE_JWT_SECRET", throwaway)
+    get_settings.cache_clear()
+    yield throwaway
+    get_settings.cache_clear()
 
 
 def _routes(client: TestClient) -> list[tuple[str, str]]:

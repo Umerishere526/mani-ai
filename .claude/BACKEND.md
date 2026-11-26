@@ -13,13 +13,25 @@ supabase start             # local Supabase (Docker must be running); see the po
 supabase db reset          # recreate and re-apply migrations
 python scripts/seed.py     # loads content/ into admin.frameworks and admin.prompts (re-run after ANY edit in content/)
 python scripts/grant_admin.py you@example.com [--revoke]  # an existing account reads every conversation read-only, and chats in none
-python scripts/seed_exercises.py  # uploads content/exercises/ audio to the private `exercises` bucket and upserts admin.exercises
+python scripts/seed_exercises.py  # the client's 67-item library (31 recorded) in ten topics: uploads content/exercises/ audio to the private `exercises` bucket and upserts admin.exercises, admin.library_topics and admin.exercise_topic_links
+scripts/convert_audio.sh <recording.wav> <content/exercises/name.mp3>  # one of the client's WAVs to the library's MP3 (64 kbps mono); prints the durationMinutes for exercises.json
 fastapi dev main.py        # dev server with reload on :8000
 fastapi run main.py        # production mode
 pytest                     # the whole suite: unit and integration (integration skips without a database)
 python evals/run_eval.py [--label <name>] [--prompt <file>] [--variant NAME=MODEL[,EFFORT[,HOST|HOST...]]]   # the gate for a prompt or model change: muhammad's test messages scored against reference replies, plus the rule cases; costs real calls
 python evals/check_suite.py   # the merge gate's conversations through the real stack with a model-played person; exits 0 only when every check passes; costs real calls
 python evals/drive.py <style> <turns> "<persona>" ["first message"]   # one model-played conversation, printed
+python evals/regress.py --list                  # the regression scenarios (TC-01..27) and the gaps, no calls
+python evals/regress.py                         # every scenario: deterministic checks, judged scores, latency, tokens; costs real calls (muhammad's yes first)
+python evals/regress.py --scenario TC-11        # one scenario (repeatable)
+python evals/regress.py --only safety|framework|pacing|isolation [--no-judge]
+python evals/regress.py --bench 5 --scenario TC-01   # the selection 5 times, latency only
+# regress.py refuses a non-local DATABASE_URL unless --allow-remote-db (a test project, never production). Exit 1 on any
+# deterministic failure; gaps, pending requirements (the client's, not yet recorded in docs/client and approved) and
+# judged scores never fail it; --strict-latency also fails a turn over its limit. The report
+# is evals/results/regress-latest.md; evals/results/summaries/ is committed so each run is compared with the last.
+# Free plumbing check: run scripts/fake_openrouter.py, set OPENROUTER_BASE_URL to it, and run script-only scenarios with
+# --no-judge (the fake only streams, so the model-played person and the judge cannot use it).
 ./scripts/test_db.sh       # schema + RLS against a throwaway Postgres (needs Docker)
 python scripts/fake_openrouter.py   # a local stand-in for OpenRouter at the production latency profile, for load tests
 python scripts/load_users.py create 100 --out tokens.json   # synthetic local users and their tokens; `remove` deletes them
@@ -39,12 +51,12 @@ Without activating, call the venv binaries directly — `./.venv/bin/python`, `.
 ## Layout
 
 - `main.py` — `create_app()` plus the module-level `app`. Sentry init and the `ServiceError` handler live here; routes do not.
-- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `runner.py` runs it as read, think, write, with no database connection held while the model thinks; `turn.py` is its steps, one model call that writes every word; `facts.py` builds the system prompt (`mani.md` and the framework guide) and the facts block that says what code would refuse; `reply.py` is the reply's shape; `decide.py` holds the guarantees (offer gating and buttons, one stage step, finish only on the last stage); `judged.py`, `safety.py` and `pause.py` move the safety state and decide a pause; `record.py` is the thread record (Mani's notes, the frameworks declined or finished, the safety keys); `taps.py` reads a tapped button. **It never reads the filesystem for content** — prompts and frameworks come from the database.
-- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (`mani.md` is the chat turn's, with its model, effort and hosts in its frontmatter); `content/frameworks/*.md` (ABCDE and Thought Reframe; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (the framework guide reads `central_indication`, `contraindications` and each stage's `intro`, `purpose` and `ready_when`; a lead-in button sends `offering.explain`, the five steps per style, and I need an example sends `offering.example`; the rest is read by nothing). Editing one of these changes nothing until it is re-seeded. Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
+- `mani/` — the application package, and the only thing that runs. `config.py`, `errors.py`, `routers/`, `auth/`, `models/`, and the `chat/`, `prompts/`, `llm/` and `db/` layers, plus `summarize.py`, `background.py`, `storage.py` and `auth_admin.py`. `chat/` is the turn: `runner.py` runs it as read, think, write, with no database connection held while the model thinks; `turn.py` is its steps, one model call that writes every word; `facts.py` builds the system prompt (`mani.md` and the framework guide) and the facts block that says what code would refuse; `reply.py` is the reply's shape; `decide.py` holds the guarantees (offer gating and buttons, one stage step, finish only on the last stage); `worry.py`, `safety.py` and `pause.py` move the safety state and decide a pause, and `crisis.py` holds the fixed safety text; `enforce.py` checks the client's checkable rules on Mani's words before they are sent; `record.py` is the thread record (Mani's notes, the frameworks declined or finished, the safety keys); `taps.py` reads a tapped button. **It never reads the filesystem for content** — prompts and frameworks come from the database.
+- `content/` — authored markdown, seeded into the `admin` schema by `scripts/seed.py` and never read at runtime. `content/prompts/*.md` become `admin.prompts` (`mani.md` is the chat turn's, with its model, effort and hosts in its frontmatter); `content/frameworks/*.md` (ABCDE, Thought Reframe and Structured Problem Solving; the rest are in `paused/`) become `admin.frameworks`, carrying each framework's per-stage content and its activation data (the framework guide reads `central_indication`, `contraindications` and each stage's `intro`, `purpose` and `ready_when`; Not sure sends `offering.explain`, the five steps per style; the rest is read by nothing). Editing one of these changes nothing until it is re-seeded. A re-seed that changes a prompt's text, model, parameters or routing first copies the row it replaces into `admin.prompt_versions` and moves its `version` on, as an edit in the admin portal does (`seed.seed_prompt`). Kept outside `mani/` because it is input to the database, not code — the same relationship a migration has to the schema.
 - `supabase/migrations/` — the schema. `test_harness.sql` stubs what Supabase adds (`auth.users`, `auth.uid()`, the three roles) so the schema can be tested on plain Postgres.
-- `evals/` — the evaluation that gates prompt and model changes (`run_eval.py`, `cases.json`) and the merge gate's conversations (`check_suite.py`, `suite.json`, `drive.py`); results go to `evals/results/`, which is gitignored.
+- `evals/` — the evaluation that gates prompt and model changes (`run_eval.py`, `cases.json`), the merge gate's conversations (`check_suite.py`, `suite.json`, `drive.py`) and the regression suite (`regress.py`, `regression/`: `scenarios.json`, `checks.py` the deterministic checks, `judge.py`, `metrics.py`, `report.py`, `play.py`); results go to `evals/results/`, which is gitignored except `summaries/`.
 - `tests/unit/` — deterministic logic. `tests/integration/` — whole turns against a live database with a scripted model. `tests/sql/` — schema, RLS and privilege assertions run by `scripts/test_db.sh`.
-- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json` plus its MP3s at 64 kbps mono; the MP3s are gitignored and stay off GitHub, so on a fresh machine copy them from production's `exercises` bucket first), `test_db.sh`.
+- `scripts/` — `seed.py`, `seed_exercises.py` (the library: `content/exercises/exercises.json`, the client's 67 items in ten topics, plus the 31 recorded ones' MP3s at 64 kbps mono; the MP3s are gitignored and stay off GitHub, so on a fresh machine copy them from production's `exercises` bucket first), `convert_audio.sh` (a client WAV to that MP3), `test_db.sh`.
 - `docs/` — `specs/` holds the client's specifications, one per framework, as the source the content is checked against; `database-schema-reference.md`; `ai-layer-audit.md` (a dated snapshot, read its banner).
 - `PORT-STATUS.md` — what the service does, what changed from the implementation it replaces, and what is still open. **Update it in the same change as the work.**
 - `requirements.txt` — runtime dependencies only, pinned, hand-maintained. `requirements-dev.txt` adds pytest and `fastapi-cli` on top. **Add a new dependency to whichever file it belongs in** — do not `pip freeze` over them, which buries the packages that matter under their transitive closure and puts a test runner in the deployed image.
@@ -95,9 +107,10 @@ Things a reviewer will check for.
 
 Things a reviewer will check for, and where they are.
 
-- **One error shape, everywhere.** `{"error": {category, message, retryable}}`. Both the
-  `ServiceError` and the validation handlers in `main.py` produce it, so a client has one
-  branch rather than two. FastAPI's default `{"detail": [...]}` is overridden.
+- **One error shape, everywhere.** `{"error": {category, message, retryable}}`. The
+  `ServiceError`, validation and unhandled-exception handlers in `main.py` all produce it, so a
+  client has one branch rather than two. FastAPI's default `{"detail": [...]}` and Starlette's
+  plain-text 500 are overridden.
 - **401 and 403 are distinct.** No usable token is `unauthenticated` → 401, so a client
   refreshes. Authenticated but not permitted is `forbidden` → 403.
 - **4xx does not log a stack trace.** Expired tokens are routine; a traceback each would
@@ -133,7 +146,7 @@ Read `mani-vault/Journal/failure-classes-from-later-branches-2026-10-21.md`, the
 1. State the root cause in one sentence before the fix. A second fix to the same class goes to the `architecture-reviewer` agent.
 2. No new gate, window, deadline or cooldown, in code or prompt. If one seems needed, stop and run `/architect`.
 3. Cut or swap prompt text; do not add. Every turn speaks from `content/prompts/mani.md`, where the three styles live; there is no per-style prompt file. A prompt or model change passes `python evals/run_eval.py` (no drop of more than 0.15 overall against a side-by-side run, and every rule case passing) before it ships.
-4. Mani's text goes out as the model wrote it; code only takes out dashes (`repairs.without_dashes`).
+4. Mani's text goes out as the model wrote it, except for dashes (`repairs.without_dashes`) and the rules in `enforce.py` (forbidden words swapped, banned lines removed, a typed stop closed, Directive held to three sentences, a repeated stock opener dropped, one question); fixed safety text and guarded turns are never cut.
 5. Free tests first (`pytest tests/unit tests/integration`); a live run costs the client's tokens, so ask muhammad.
 6. Reseed (`python scripts/seed.py`) after content edits, and read the chat against the client's requirements.
 

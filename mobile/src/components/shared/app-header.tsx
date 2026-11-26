@@ -101,7 +101,7 @@ export function AppHeader({
             <Pressable
               onPress={openCrisisDrawer}
               className={cn(
-                'flex-row items-center justify-center gap-1 rounded-full bg-primary-500 px-3 py-2 active:opacity-80',
+                'min-h-11 flex-row items-center justify-center gap-1 rounded-full bg-primary-500 px-3 py-2 active:opacity-80',
                 helpButtonClassName,
               )}
               accessibilityLabel={en.chat.getHelpNowLabel}

@@ -17,6 +17,13 @@ os.environ["MINUTE_MESSAGE_LIMIT"] = "0"
 os.environ["REASONING_EFFORT"] = "high"
 # The pause tests expect the default length, whatever a developer sets in .env.
 os.environ["CRISIS_PAUSE_SECONDS"] = "30"
+# A scripted model answers each call in turn, so the reply check (a second call per turn) is off unless a test turns
+# it on; tests/integration/test_reply_check.py does.
+os.environ["REPLY_CHECK_ENABLED"] = "false"
+# The app opens one database connection at start (DB_POOL_MIN_SIZE 1, for the first turn after a cold start). Unit
+# tests start the app with no database (CI has none), so they open the pool empty; integration tests connect as they
+# need to.
+os.environ["DB_POOL_MIN_SIZE"] = "0"
 
 if not ENV_FILE.exists():
     # Only a fallback, for a machine with no .env - enough for the unit suite to import

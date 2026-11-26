@@ -1,10 +1,10 @@
 // ABOUTME: Admin page showing one chat thread's header info and full transcript.
-// ABOUTME: Ported from mani-app's app/admin/chats/[id]/page.tsx.
+// ABOUTME: Reads the transcript from the backend, which logs every read.
 
 import { notFound } from "next/navigation";
 import { BackLink, Badge } from "@/components/shared";
 import { ChatTranscript } from "@/components/admin/chat-transcript";
-import { getThreadById, getThreadMessages } from "@/lib/placeholder-threads";
+import { getTranscript } from "@/lib/api/threads";
 import dictionary from "@/dictionaries/en.json";
 
 const STRINGS = dictionary.admin.pages.chats;
@@ -15,12 +15,12 @@ interface ChatDetailPageProps {
 
 export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
   const { id } = await params;
-  const thread = getThreadById(id);
-  const messages = getThreadMessages(id);
+  const transcript = await getTranscript(id);
 
-  if (!thread) {
+  if (!transcript) {
     notFound();
   }
+  const { thread, messages } = transcript;
 
   return (
     <div>
@@ -32,7 +32,7 @@ export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
             <h1 className="text-[1.75rem] font-semibold tracking-tight text-mani-text">
               {thread.title ?? STRINGS.untitled}
             </h1>
-            <div className="mt-2 flex items-center gap-4">
+            <div className="mt-2 flex flex-wrap items-center gap-x-4 gap-y-1">
               <p className="text-sm text-mani-text-muted">
                 {STRINGS.userPrefix}
                 {thread.userNickname ?? STRINGS.anonymous} ({thread.userEmail ?? thread.userId})
@@ -49,7 +49,7 @@ export default async function ChatDetailPage({ params }: ChatDetailPageProps) {
               </p>
             </div>
           </div>
-          {thread.crisisDetected && <Badge variant="accent">{STRINGS.crisisDetected}</Badge>}
+          {thread.crisisDetected && <Badge variant="danger">{STRINGS.crisisDetected}</Badge>}
         </div>
 
         <div className="border-t border-mani-border">

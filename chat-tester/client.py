@@ -24,7 +24,6 @@ API_BASE_URL = os.environ.get("API_BASE_URL", "http://127.0.0.1:8000")
 DATABASE_URL = os.environ.get("DATABASE_URL", "")
 SUPABASE_URL = os.environ.get("SUPABASE_URL", "http://127.0.0.1:54341")
 SUPABASE_ANON_KEY = os.environ.get("SUPABASE_ANON_KEY", "")
-SUPABASE_SERVICE_ROLE_KEY = os.environ.get("SUPABASE_SERVICE_ROLE_KEY", "")
 
 
 # The claim the backend reads to make an account an admin (backend/mani/auth/jwt.py). It lives in
@@ -49,6 +48,16 @@ class ApiError(Exception):
             # Not the backend's own error shape - a platform-level response (a host's
             # generic 404/500 page, a proxy timeout) that never reached our app at all.
             super().__init__(f"{status}: {body.get('raw', 'no body')}")
+
+
+class BackendUnreachable(ApiError):
+    """No answer from the backend at all: not reachable, or nothing within the request timeout. A request that
+    timed out may still finish on the backend."""
+
+    def __init__(self, cause: requests.RequestException) -> None:
+        self.status = 0
+        self.body: dict[str, Any] = {}
+        Exception.__init__(self, f"The backend did not answer: {cause}")
 
 
 @dataclass
@@ -83,17 +92,14 @@ def _reason(response: requests.Response) -> str:
     return body.get("msg") or body.get("error_description") or body.get("message") or response.text
 
 
-def _require_keys() -> None:
-    if not (SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY):
-        raise RuntimeError(
-            "SUPABASE_ANON_KEY and SUPABASE_SERVICE_ROLE_KEY are not set - "
-            "`supabase status -o env` prints both; see .env.example"
-        )
+def _require_anon_key() -> None:
+    if not SUPABASE_ANON_KEY:
+        raise RuntimeError("SUPABASE_ANON_KEY is not set - `supabase status -o env` prints it; see .env.example")
 
 
 def sign_in_with_password(email: str, password: str) -> Session:
     """A real Supabase sign-in, so the backend verifies these tokens exactly as a phone's."""
-    _require_keys()
+    _require_anon_key()
     response = _auth(
         "token?grant_type=password", {"email": email.strip(), "password": password},
         SUPABASE_ANON_KEY,
@@ -103,75 +109,18 @@ def sign_in_with_password(email: str, password: str) -> Session:
     return _session(response.json())
 
 
-def sign_up(email: str, password: str) -> Session:
-    """A new test account, created confirmed, then signed straight in.
+def sign_up(email: str, password: str) -> Session | None:
+    """A new account through Supabase Auth's public signup, as a real app makes one, with the publishable key only.
 
-    Created through the Admin API rather than the public signup endpoint. Signup sends a
-    real confirmation email even when nothing ever reads it, and the project's default mail
-    service allows only two an hour - a limit meant for a handful of early logins, not a demo
-    tool creating test accounts. Admin-created users need no confirming and send no mail, so
-    the same two calls every deploy target uses (Admin API, then a password sign-in) never
-    touch that limit.
+    Returns the signed-in session when the project confirms accounts itself (the hosted mani-app does), or None
+    when it sends a confirmation email first (local Supabase does): the account signs in once that is confirmed.
     """
-    _require_keys()
-    email = email.strip()
-    created = requests.post(
-        f"{SUPABASE_URL}/auth/v1/admin/users",
-        json={"email": email, "password": password, "email_confirm": True},
-        headers={"apikey": SUPABASE_SERVICE_ROLE_KEY,
-                 "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"},
-        timeout=10,
-    )
-    if not created.ok:
-        raise RuntimeError(f"Could not sign up: {_reason(created)}")
-    return sign_in_with_password(email, password)
-
-
-def _admin_headers() -> dict[str, str]:
-    return {"apikey": SUPABASE_SERVICE_ROLE_KEY,
-            "Authorization": f"Bearer {SUPABASE_SERVICE_ROLE_KEY}"}
-
-
-def _account_for(email: str) -> dict[str, Any]:
-    """The auth user for this email. GoTrue's admin API has no email filter, so scan pages."""
-    wanted = email.strip().lower()
-    page = 1
-    while True:
-        listed = requests.get(
-            f"{SUPABASE_URL}/auth/v1/admin/users",
-            params={"page": page, "per_page": 1000}, headers=_admin_headers(), timeout=10,
-        )
-        if not listed.ok:
-            raise RuntimeError(f"Could not look up the account: {_reason(listed)}")
-        users = listed.json().get("users", [])
-        for user in users:
-            if (user.get("email") or "").lower() == wanted:
-                return user
-        if len(users) < 1000:
-            raise RuntimeError("No account with that email.")
-        page += 1
-
-
-def reset_password(email: str, new_password: str) -> Session:
-    """Set a new password for this email straight from the page, then sign in.
-
-    No email and no code, so the tester needs no mail setup. That also means anyone who can
-    reach the page can reset any ordinary account's password: keep the page non-public. An
-    admin account is refused - whoever reset it could read every person's conversations.
-    """
-    _require_keys()
-    account = _account_for(email)
-    if (account.get("app_metadata") or {}).get("admin_role") == ADMIN_ROLE:
-        raise RuntimeError(
-            "This account's password cannot be reset here. Ask whoever runs the project to reset it."
-        )
-    updated = requests.put(
-        f"{SUPABASE_URL}/auth/v1/admin/users/{account['id']}",
-        json={"password": new_password}, headers=_admin_headers(), timeout=10,
-    )
-    if not updated.ok:
-        raise RuntimeError(f"Could not set the new password: {_reason(updated)}")
-    return sign_in_with_password(email, new_password)
+    _require_anon_key()
+    response = _auth("signup", {"email": email.strip(), "password": password}, SUPABASE_ANON_KEY)
+    if not response.ok:
+        raise RuntimeError(f"Could not sign up: {_reason(response)}")
+    body = response.json()
+    return _session(body) if body.get("access_token") else None
 
 
 def is_admin(session: Session) -> bool:
@@ -208,9 +157,12 @@ class ManiClient:
             "Authorization": f"Bearer {self.session.access_token}",
             "Content-Type": "application/json",
         }
-        return requests.request(
-            method, f"{self.base_url}{path}", headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
-        )
+        try:
+            return requests.request(
+                method, f"{self.base_url}{path}", headers=headers, timeout=REQUEST_TIMEOUT_SECONDS, **kwargs
+            )
+        except requests.RequestException as exc:
+            raise BackendUnreachable(exc) from exc
 
     def _call(self, method: str, path: str, **kwargs) -> dict[str, Any]:
         response = self._request(method, path, **kwargs)
@@ -333,9 +285,14 @@ class ManiClient:
         """
         return self._call("GET", f"/v1/admin/threads/{thread_id}")
 
-    def list_exercises(self) -> list[dict[str, Any]]:
-        """GET /v1/exercises - the whole library, each item with a signed audio link and the person's own rating."""
-        return self._call("GET", "/v1/exercises")
+    def list_topics(self) -> list[dict[str, Any]]:
+        """GET /v1/exercises/topics - the library's topics in the client's order, each with its title and blurb."""
+        return self._call("GET", "/v1/exercises/topics")
+
+    def list_exercises(self, topic: str) -> list[dict[str, Any]]:
+        """GET /v1/exercises?category= - one topic's exercises, its own first, then those it lists from other topics
+        under their `subcategory`; each with a signed audio link (none while not recorded) and the person's rating."""
+        return self._call("GET", "/v1/exercises", params={"category": topic})
 
     def rate_exercise(self, exercise_id: str, rating: str, reason: str | None = None) -> dict[str, Any]:
         """PUT /v1/exercises/{id}/feedback - a 👍 ("up") or 👎 ("down") on an exercise, replacing any earlier one."""
@@ -365,22 +322,21 @@ class ManiClient:
     def transcribe_audio(self, audio_bytes: bytes, filename: str = "recording.wav") -> str:
         """POST /v1/audio/transcriptions - voice in, text out. Not JSON: a multipart
         upload, so _call's json-only _request is skipped in favour of files=."""
-        headers = {"Authorization": f"Bearer {self.session.access_token}"}
-        response = requests.post(
-            f"{self.base_url}/v1/audio/transcriptions",
-            headers=headers,
-            files={"file": (filename, audio_bytes, "audio/wav")},
-            timeout=60,
-        )
+        def post() -> requests.Response:
+            try:
+                return requests.post(
+                    f"{self.base_url}/v1/audio/transcriptions",
+                    headers={"Authorization": f"Bearer {self.session.access_token}"},
+                    files={"file": (filename, audio_bytes, "audio/wav")},
+                    timeout=60,
+                )
+            except requests.RequestException as exc:
+                raise BackendUnreachable(exc) from exc
+
+        response = post()
         if response.status_code == 401:
             self.session = refresh(self.session)
-            headers = {"Authorization": f"Bearer {self.session.access_token}"}
-            response = requests.post(
-                f"{self.base_url}/v1/audio/transcriptions",
-                headers=headers,
-                files={"file": (filename, audio_bytes, "audio/wav")},
-                timeout=60,
-            )
+            response = post()
         if not response.ok:
             try:
                 body = response.json()

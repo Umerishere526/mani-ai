@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): a design or plan as written at the time; parts no longer match the code (the return check after a pause, for one, is gone). What the backend does today is in `backend/PORT-STATUS.md`.
+
 # Plan: make `[ctx]` explain itself
 
 Move the `[ctx]` key dictionary out of `response_format.md` and into `context.py`, so a key's

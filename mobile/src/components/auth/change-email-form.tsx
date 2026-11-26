@@ -1,8 +1,10 @@
-// ABOUTME: The "enter a new email address" phase of ChangeEmailScreen.
+// ABOUTME: The "enter a new email address" phase of ChangeEmailScreen — the current
+// ABOUTME: address read-only, the new-address field, and the Send Code button.
 
 import { View } from "react-native";
 import { PrimaryButton, Text, TextInput } from "@/components/shared";
 import en from "@/dictionaries/en.json";
+import { LabeledField } from "./labeled-field";
 
 export interface ChangeEmailFormProps {
   currentEmail: string;
@@ -25,26 +27,23 @@ export function ChangeEmailForm({ currentEmail, newEmail, onNewEmailChange, onSu
         </View>
       </View>
 
-      <View className="mb-6">
-        <Text className="mb-2 font-sans-medium text-sm text-secondary-500/90">{en.changeEmail.newEmailLabel}</Text>
-        <View className="rounded-xl border border-secondary-500/15 bg-secondary-500/8">
-          <TextInput
-            className="px-4 py-4 text-base"
-            value={newEmail}
-            onChangeText={onNewEmailChange}
-            placeholder={en.changeEmail.newEmailPlaceholder}
-            placeholderTextColor="rgba(255, 244, 225, 0.4)"
-            keyboardType="email-address"
-            autoCapitalize="none"
-            autoCorrect={false}
-            autoComplete="email"
-            returnKeyType="done"
-            onSubmitEditing={onSubmit}
-            accessibilityLabel={en.changeEmail.newEmailAccessibilityLabel}
-            accessibilityHint={en.changeEmail.newEmailHint}
-          />
-        </View>
-      </View>
+      <LabeledField label={en.changeEmail.newEmailLabel}>
+        <TextInput
+          className="flex-1 px-4 py-4 text-base"
+          value={newEmail}
+          onChangeText={onNewEmailChange}
+          placeholder={en.changeEmail.newEmailPlaceholder}
+          placeholderTextColor="rgba(255, 244, 225, 0.4)"
+          keyboardType="email-address"
+          autoCapitalize="none"
+          autoCorrect={false}
+          autoComplete="email"
+          returnKeyType="done"
+          onSubmitEditing={onSubmit}
+          accessibilityLabel={en.changeEmail.newEmailAccessibilityLabel}
+          accessibilityHint={en.changeEmail.newEmailHint}
+        />
+      </LabeledField>
 
       <PrimaryButton
         label={isSending ? en.changeEmail.sending : en.changeEmail.sendCode}

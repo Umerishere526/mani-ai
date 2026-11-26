@@ -92,6 +92,8 @@ everywhere, and that every foreign key is indexed. Run it against local Supabase
 
 - All schema changes go through migration files in version control. No ad-hoc SQL against a live database, and no clicking through the dashboard for anything structural.
 - One logical change per migration, with a descriptive name.
+- **Name every migration from here on with a UTC timestamp, never the next number:** create it with `supabase migration new <descriptive_name>`, which writes `backend/supabase/migrations/<YYYYMMDDHHMMSS>_<descriptive_name>.sql`. The files `000` to `048` keep their numbers; never rename one that has run anywhere, because `supabase_migrations.schema_migrations` keys on that version. A timestamp sorts after every number, so the order holds. Why: two branches each took the next free number and collided (two `011` and two `012` after a merge, 2026-10-06; `043` held by a stashed branch, so `044` skipped it; on 2026-11-25 two parallel branches both planned a `046`), and a database records only one migration per version.
+- A data migration's fixtures in `backend/tests/sql/migrations/` are named by the migration's version, the part before the first `_`: `before_<version>.sql` and `after_<version>.sql` (`scripts/test_db.sh`).
 - Migrations are forward-only in shared environments — to undo, write a new migration.
 - Regenerate TypeScript types after every schema change and commit the result, so `web/` and `mobile/` fail at compile time rather than runtime.
 

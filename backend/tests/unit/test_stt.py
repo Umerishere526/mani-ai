@@ -3,8 +3,11 @@
 
 from types import SimpleNamespace
 
+import pytest
+
 from mani import stt
 from mani.config import Settings
+from mani.errors import ErrorCategory, ServiceError
 
 
 def settings() -> Settings:
@@ -45,9 +48,43 @@ async def test_a_transcript_goes_only_to_the_providers_chat_may_use(monkeypatch)
     provider = (await translate(monkeypatch))["extra_body"]["provider"]
     assert provider["only"] == settings().openrouter_providers
     assert provider["data_collection"] == "deny"
+    assert provider["zdr"] is True
+
+
+class FakeTranscriptions:
+    """The OpenAI SDK's audio.transcriptions, keeping what it was asked to send."""
+
+    def __init__(self) -> None:
+        self.sent: list[dict] = []
+
+    async def create(self, **request):
+        self.sent.append(request)
+        return SimpleNamespace(text="Hi, I'm tired.")
+
+
+async def test_a_recording_goes_only_to_endpoints_that_keep_no_data(monkeypatch):
+    """The recording is what they said, sent before any translation, so it carries the same data policy."""
+    transcriptions = FakeTranscriptions()
+    monkeypatch.setattr(stt, "_http", lambda _: SimpleNamespace(
+        audio=SimpleNamespace(transcriptions=transcriptions), chat=SimpleNamespace(completions=FakeCompletions()),
+    ))
+    assert await stt.transcribe(b"audio", "clip.webm", settings=settings()) == "Hi, I'm tired."
+    assert transcriptions.sent[0]["extra_body"]["provider"] == {"data_collection": "deny", "zdr": True}
 
 
 async def test_the_translation_says_how_hard_to_think(monkeypatch):
     request = await translate(monkeypatch)
     assert request["extra_body"]["reasoning"] == {"effort": settings().reasoning_effort}
     assert "temperature" not in request
+
+
+async def test_a_recording_vercel_would_refuse_is_refused_in_our_own_shape_before_the_provider(monkeypatch):
+    """Vercel turns away a request body past 4.5 MB with a 413 of its own; the backend's ceiling sits below that, so
+    the client gets the one error shape it branches on, and nothing reaches the provider."""
+    transcriptions = FakeTranscriptions()
+    monkeypatch.setattr(stt, "_http", lambda _: SimpleNamespace(audio=SimpleNamespace(transcriptions=transcriptions)))
+    assert stt.MAX_AUDIO_BYTES < 4.5 * 1000 * 1000
+
+    with pytest.raises(ServiceError) as refused:
+        await stt.transcribe(b"a" * (stt.MAX_AUDIO_BYTES + 1), "clip.m4a", settings=settings())
+    assert refused.value.category is ErrorCategory.INVALID_REQUEST and transcriptions.sent == []

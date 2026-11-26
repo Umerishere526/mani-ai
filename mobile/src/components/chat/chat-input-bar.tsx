@@ -38,7 +38,7 @@ export const ChatInputBar = forwardRef<ChatInputBarRef, ChatInputBarProps>(funct
   }, [canSend, onSend]);
 
   return (
-    <View className="px-4 pt-2" style={{ paddingBottom: insets.bottom || 12 }}>
+    <View className="px-4 pt-2" style={{ paddingBottom: Math.max(insets.bottom, 12) }}>
       <View className="flex-row items-end gap-2">
         <View className="flex-1 flex-row rounded-xl bg-primary-600 py-1.5 pl-4 pr-1">
           <TextInput
@@ -64,7 +64,7 @@ export const ChatInputBar = forwardRef<ChatInputBarRef, ChatInputBarProps>(funct
         {onGetHelp && (
           <Pressable
             onPress={onGetHelp}
-            className="h-12 justify-center rounded-full bg-primary-600 px-5 opacity-90 active:opacity-70"
+            className="min-h-12 justify-center rounded-full bg-primary-600 px-5 opacity-90 active:opacity-70"
             accessibilityLabel={en.chat.getHelpLabel}
             accessibilityRole="button"
           >

@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): this spec describes code deleted or rebuilt since, most of it with the one-call turn of 2026-11-17. What the backend does today is in `backend/PORT-STATUS.md`.
+
 # 0007: Safety follows what they said
 
 > **Superseded in part, 2026-11-10 (muhammad).** Sections 1 to 4b below (signs, urgent signs, the settling rule, the

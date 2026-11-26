@@ -2,12 +2,10 @@
 
 The product specifications for Mani's conversational layer, transcribed from the source PDFs so
 they live in version control rather than as chat attachments. **These are provenance.** The
-implementation source of truth is the code and the ADRs in `mani-vault/Decisions/` (index: `_Index.md`);
-`mani-vault/Programme/conversational-architecture.md` is the historical design that reconciled the
-contradictions between these documents. The content files in `backend/content/frameworks/` are checked
-against these specs, but where a spec's tone lines carry scenario text ("her silence", "send it") the
-content uses each stage's primary question instead: `tests/evals/test_negative_set.py` rejects an ask that
-names someone or hands over a feeling word.
+implementation source of truth is the code, `backend/PORT-STATUS.md` ("Decisions in force") and the ADR index in
+[`mani-vault/Decisions/_Index.md`](../../../mani-vault/Decisions/_Index.md). The content files in
+`backend/content/frameworks/` are written from these specs, but where a spec's tone lines carry scenario text
+("her silence", "send it") the content uses each stage's primary question instead.
 
 Requirements the client sent after these specs, and the messages they came from, are in
 [`docs/client/`](../../../docs/client/README.md). A newer client message beats an older spec.
@@ -33,16 +31,16 @@ must avoid**.
 
 ## How the code uses these
 
-- **"What MANI may hear"** → the rule-based router's phrase patterns, seeded into
-  `admin.frameworks.activation`. Free: no API call.
-- **"Important Framework Distinctions"** and each file's §9 → the router's tie-breakers.
-- **Stage sections (§§11–18)** → `admin.frameworks.stages` jsonb, one entry per phase, with the
-  three tone variants at the `ask` leaf only.
-- **"Responses MANI Must Avoid"** → `tests/evals/` negative assertions, which run with no model
-  call.
-- **Worked examples (§23)** and the styles doc's scenarios → the routing and
-  style-differentiation eval sets.
-- **Rules repeated across all six** → `content/prompts/mani_base.md` (conversation rules and tone) and, for the body check-in and practice after a framework, `content/prompts/somatic.md`, which `scripts/seed.py` appends to every framework's stages.
+- **When a framework fits and when not to offer it** → each active framework file's `activation`
+  (`central_indication`, `contraindications`), seeded into `admin.frameworks.activation`. The model chooses the
+  framework from the guide built out of them (`facts.system_prompt`); there is no phrase router.
+- **Stage sections (§§11–18)** → `admin.frameworks.stages` jsonb, one entry per phase: each stage's `intro`,
+  `purpose` and `ready_when`, and the offering's five steps per style.
+- **"Responses MANI Must Avoid"** and the rules repeated across all six → `content/prompts/mani.md`, the one chat
+  prompt, `mani/chat/enforce.py` (the forbidden words and banned lines), and the rule checks of `backend/evals/`
+  (`reply_rules.py`, `cases.json`).
+- Active today: ABCDE, Thought Reframe and Structured Problem Solving; the other three are in
+  `content/frameworks/paused/`. The body check-in was deleted on 2026-11-17.
 
 ## Not in these documents
 

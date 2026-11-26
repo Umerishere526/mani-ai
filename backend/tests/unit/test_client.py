@@ -50,7 +50,7 @@ class FakeRunnable:
             raise result
         return result
 
-    async def astream(self, messages: list[dict]):
+    async def astream(self, messages: list[dict], config=None):
         for key, value in (await self.scripted(messages)).items():
             yield {key: value}
 
@@ -150,7 +150,7 @@ async def test_a_provider_error_is_not_retried_by_the_schema_loop(monkeypatch, r
     assert [c["outcome"] for c in recorded] == [llm_calls.Outcome.PROVIDER_ERROR]
 
 
-def cut_off(output_tokens: int = 2048, reasoning: int = 0) -> openai.LengthFinishReasonError:
+def cut_off(output_tokens: int = 2048, reasoning: int = 0, cost: float | None = None) -> openai.LengthFinishReasonError:
     """What the SDK raises from inside the model step when the reply hits max_tokens.
 
     Raised, not returned: with a response_format LangChain calls the SDK's parse(), which
@@ -165,13 +165,14 @@ def cut_off(output_tokens: int = 2048, reasoning: int = 0) -> openai.LengthFinis
                 total_tokens=100 + output_tokens,
                 prompt_tokens_details={"cached_tokens": 60},
                 completion_tokens_details={"reasoning_tokens": reasoning},
+                cost=cost,
             ),
         )
     )
 
 
 async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, recorded):
-    runnable = FakeRunnable(cut_off(reasoning=1955), valid("second try"))
+    runnable = FakeRunnable(cut_off(reasoning=1955, cost=0.0061), valid("second try"))
     install(monkeypatch, runnable)
 
     call = await client.complete(
@@ -188,6 +189,7 @@ async def test_a_reply_cut_off_by_the_token_limit_is_retried(monkeypatch, record
     assert failed["usage"].output_tokens == 2048
     assert failed["usage"].reasoning_tokens == 1955
     assert failed["usage"].cached_input_tokens == 60
+    assert failed["usage"].cost_usd == 0.0061
 
 
 async def test_a_failed_second_attempt_does_not_repeat_the_first_attempts_tokens(
@@ -259,6 +261,49 @@ async def test_a_provider_blip_is_retried_once(monkeypatch, recorded):
     assert recorded[0]["outcome"] is llm_calls.Outcome.PROVIDER_ERROR
 
 
+def bad_request(body: dict) -> openai.BadRequestError:
+    import httpx
+
+    request = httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions")
+    return openai.BadRequestError("Error code: 400", response=httpx.Response(400, request=request), body=body)
+
+
+async def test_openrouter_refusing_to_relay_is_retried_once_and_says_why(monkeypatch, recorded):
+    """2026-11-25: 23 of 25 calls in one minute came back 400 "Request path cannot be relayed", OpenRouter's own
+    refusal with no provider involved, and each reached the person as the fixed error reply."""
+    relay = bad_request({"error": {"message": "Request path cannot be relayed", "code": 400}})
+    runnable = FakeRunnable(relay, valid("answered on the retry"))
+    install(monkeypatch, runnable)
+    monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Said, model="m",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert call.value.text == "answered on the retry"
+    assert runnable.calls == 2
+    assert "Request path cannot be relayed" in recorded[0]["error_message"]
+
+
+async def test_a_providers_400_is_not_retried_and_keeps_its_body_out(monkeypatch, recorded):
+    """A 400 a provider raised carries its raw body in metadata, which can quote what they wrote: not retried, and
+    only its host is stored."""
+    words = "I keep snapping at my partner"
+    refused = bad_request({"error": {"message": "Provider returned error",
+                                     "metadata": {"provider_name": "DeepInfra", "raw": f"bad input: {words}"}}})
+    runnable = FakeRunnable(refused, valid("never reached"))
+    install(monkeypatch, runnable)
+
+    with pytest.raises(ServiceError):
+        await client.complete(
+            [{"role": "user", "content": "hi"}], Said, model="m",
+            purpose=llm_calls.Purpose.CHAT, settings=settings(),
+        )
+    assert runnable.calls == 1
+    assert words not in recorded[0]["error_message"] and "DeepInfra" in recorded[0]["error_message"]
+
+
 async def test_a_provider_down_twice_fails_the_turn(monkeypatch, recorded):
     install(monkeypatch, FakeRunnable(provider_down(), provider_down()))
     monkeypatch.setattr(client, "TRANSIENT_RETRY_DELAY_SECONDS", 0)
@@ -295,7 +340,7 @@ async def test_a_chat_reply_past_its_deadline_fails_as_too_slow_and_is_recorded(
     class Stalled:
         calls = 0
 
-        async def astream(self, messages):
+        async def astream(self, messages, config=None):
             Stalled.calls += 1
             await asyncio.sleep(10)
             yield {}
@@ -328,7 +373,8 @@ def openrouter_stream(content: str, generation_id: str, finish_reason: str = "st
             delta = {"role": "assistant", "content": piece}
             yield f"data: {json.dumps({**base, 'choices': [{'index': 0, 'delta': delta, 'finish_reason': None}]})}\n\n".encode()
         yield f"data: {json.dumps({**base, 'choices': [{'index': 0, 'delta': {}, 'finish_reason': finish_reason}]})}\n\n".encode()
-        usage = {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300}
+        usage = {"prompt_tokens": 7000, "completion_tokens": 300, "total_tokens": 7300, "cost": 0.0042, "is_byok": False,
+                 "prompt_tokens_details": {"cached_tokens": 0}, "cost_details": {"upstream_inference_cost": None}}
         yield f"data: {json.dumps({**base, 'choices': [], 'usage': usage})}\n\n".encode()
         yield b"data: [DONE]\n\n"
 
@@ -387,6 +433,20 @@ async def test_a_streamed_reply_records_its_usage_and_generation(monkeypatch, re
 
     assert call.value.text == "hello"
     assert (call.usage.input_tokens, call.usage.output_tokens) == (7000, 300)
+    assert call.usage.cost_usd == 0.0042, "OpenRouter's billed cost survives LangChain's stream"
+
+
+async def test_a_streamed_reply_records_when_its_first_chunk_arrived(monkeypatch, recorded):
+    """The reply is parsed whole at the end, so the time to its first chunk, the model thinking, is measured apart
+    from the whole call."""
+    over_openrouter(monkeypatch, openrouter_stream('{"text": "hello"}', "gen-streamed", wait=0.2))
+
+    call = await client.complete(
+        [{"role": "user", "content": "hi"}], Said, model="openai/gpt-6-luna",
+        purpose=llm_calls.Purpose.CHAT, settings=settings(),
+    )
+
+    assert 200 <= call.first_token_ms <= call.latency_ms
     assert [(r["outcome"], r["generation_id"]) for r in recorded] == [(llm_calls.Outcome.OK, "gen-streamed")]
 
 
@@ -544,11 +604,12 @@ async def test_only_the_chat_reply_asks_for_the_priority_tier_and_each_purpose_k
     assert chat["service_tier"] == "priority"
     assert chat["provider"] == {
         "only": ["openai", "openai/priority"], "sort": "latency", "allow_fallbacks": True,
-        "data_collection": "deny",
+        "data_collection": "deny", "zdr": True,
     }
     for purpose, body in zip(purposes[1:], background, strict=True):
         assert "service_tier" not in body, purpose
         assert body["provider"]["only"] == ["openai"], purpose
+        assert body["provider"]["zdr"] is True, purpose
         assert body["session_id"] == body["prompt_cache_key"] == f"{THREAD}:{purpose.value}"
 
 
@@ -657,6 +718,25 @@ def test_a_provider_error_is_stored_without_the_body_that_can_quote_their_messag
     assert described == "PermissionDeniedError: 403"
 
 
+def test_a_provider_error_names_the_host_that_refused_and_still_quotes_nothing():
+    """2026-11-25: 19 chat calls failed with a bare 400 and nothing said which host refused them. The host OpenRouter
+    names is kept; the raw body, which can quote what they wrote, is not."""
+    import httpx
+
+    words = "my manager keeps adding tasks"
+    response = httpx.Response(400, request=httpx.Request("POST", "https://openrouter.ai/api/v1/chat/completions"))
+    refused = openai.BadRequestError(
+        f"Error code: 400 - raw: {words}", response=response,
+        body={"error": {"code": 400, "message": "Provider returned error",
+                        "metadata": {"provider_name": "Fireworks", "raw": f"invalid schema near '{words}'"}}},
+    )
+
+    described = client._described(refused)
+
+    assert words not in described
+    assert described == "BadRequestError: 400 from Fireworks"
+
+
 async def test_an_empty_reply_is_retried_like_any_reply_that_does_not_parse(monkeypatch, recorded):
     """2026-11-23: a host answered with reasoning tokens and no content. LangChain raises a plain ValueError for that,
     which no retry caught, so a person who wrote "i want to talk about thanksgiving" got the fixed reply with a crisis
@@ -678,3 +758,123 @@ async def test_an_empty_reply_is_retried_like_any_reply_that_does_not_parse(monk
         (llm_calls.Outcome.SCHEMA_INVALID, None),
         (llm_calls.Outcome.OK, "gen-answered"),
     ]
+
+
+class Host:
+    """One host's answer to a request, as chain.build()'s Runnable streams it: `chunk_at` is when its first chunk
+    arrives (never, when None), `wait` how long it takes in all, and `result` what it comes back with."""
+
+    def __init__(self, result, *, wait: float = 0.0, chunk_at: float | None = None) -> None:
+        self.result, self.wait, self.chunk_at = result, wait, chunk_at
+        self.calls = 0
+        self.cancelled = False
+
+    async def astream(self, messages, config=None):
+        self.calls += 1
+        began = asyncio.get_running_loop().time()
+        try:
+            if self.chunk_at is not None:
+                await asyncio.sleep(self.chunk_at)
+                for callback in config["callbacks"]:
+                    await callback.on_llm_new_token("")
+            await asyncio.sleep(self.wait - (asyncio.get_running_loop().time() - began))
+        except asyncio.CancelledError:
+            self.cancelled = True
+            raise
+        if isinstance(self.result, BaseException):
+            raise self.result
+        for key, value in self.result.items():
+            yield {key: value}
+
+
+TWO_HOSTS = {"only": ["sail-research", "deepinfra"], "sort": "price"}
+
+
+def hosts(monkeypatch, first: Host, other: Host) -> list[dict]:
+    """chain.build answering with `first` for the prompt row's routing and `other` for any other; returns what each
+    build was asked for."""
+    built: list[dict] = []
+
+    def build(*args, routing, session, **kwargs):
+        built.append({"only": routing["only"], "session": session})
+        return first if routing == TWO_HOSTS else other
+
+    monkeypatch.setattr(client.chain, "build", build)
+    return built
+
+
+def racing(**update) -> Settings:
+    return settings().model_copy(update={"chat_hedge_seconds": 0.05, **update})
+
+
+async def test_a_host_that_sends_nothing_is_raced_on_the_other_host_and_the_slower_is_cancelled(monkeypatch, recorded):
+    """REL-2, 2026-11-25: providers slowed to 20 to 27 s with the first chunk past 15 s, and nothing tried elsewhere.
+    Past the hedge wait the other host starts beside the first; its answer is the reply, the stalled request is
+    cancelled, and both are recorded."""
+    stalled, other = Host(valid("too slow"), wait=10), Host(valid("from the other host"), wait=0.05)
+    built = hosts(monkeypatch, stalled, other)
+    began = asyncio.get_running_loop().time()
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 thread_id=THREAD, settings=racing())
+
+    assert call.value.text == "from the other host"
+    assert asyncio.get_running_loop().time() - began < 1.0
+    assert built == [{"only": ["sail-research", "deepinfra"], "session": f"{THREAD}:chat"},
+                     {"only": ["deepinfra"], "session": None}], "no sticky key, so the race never re-pins the thread"
+    assert stalled.cancelled
+    assert [(r["outcome"], r["error_message"]) for r in recorded] == [
+        (llm_calls.Outcome.TIMEOUT, "attempt 1/2: not used, attempt 2 answered first and this one was cancelled"),
+        (llm_calls.Outcome.OK, None),
+    ]
+
+
+async def test_a_host_that_has_begun_streaming_is_not_raced(monkeypatch, recorded):
+    streaming, other = Host(valid("streaming"), chunk_at=0.01, wait=0.2), Host(valid("never asked"))
+    built = hosts(monkeypatch, streaming, other)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 settings=racing())
+
+    assert call.value.text == "streaming" and other.calls == 0 and len(built) == 1
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.OK]
+
+
+async def test_the_first_host_still_answers_when_the_raced_host_fails(monkeypatch, recorded):
+    slow, broken = Host(valid("slow but there"), wait=0.3), Host(provider_down())
+    hosts(monkeypatch, slow, broken)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 settings=racing())
+
+    assert call.value.text == "slow but there"
+    assert [(r["outcome"], r["error_message"]) for r in recorded] == [
+        (llm_calls.Outcome.PROVIDER_ERROR, "attempt 2/2: InternalServerError: 503"),
+        (llm_calls.Outcome.OK, None),
+    ]
+
+
+async def test_an_empty_reply_is_retried_on_the_other_host(monkeypatch, recorded):
+    """2026-11-23: a host answered with reasoning and no content. Its retry goes to the host it did not come from."""
+    empty = Host(ValueError(f"Structured Output response {client.NO_CONTENT}"))
+    other = Host(valid("second host"))
+    built = hosts(monkeypatch, empty, other)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing=TWO_HOSTS,
+                                 settings=racing(chat_hedge_seconds=8.0))
+
+    assert call.value.text == "second host"
+    assert [b["only"] for b in built] == [["sail-research", "deepinfra"], ["deepinfra"]]
+    assert [r["outcome"] for r in recorded] == [llm_calls.Outcome.SCHEMA_INVALID, llm_calls.Outcome.OK]
+
+
+async def test_with_one_host_allowed_a_silent_call_is_never_raced(monkeypatch, recorded):
+    """A background call, or a chat row naming one host, has nowhere else to go: it keeps waiting on its one request."""
+    slow = Host(valid("one host"), wait=0.2)
+    built: list = []
+    monkeypatch.setattr(client.chain, "build", lambda *a, **kw: built.append(kw["routing"]) or slow)
+
+    call = await client.complete([], Said, model="m", purpose=llm_calls.Purpose.CHAT, routing={"only": ["deepinfra"]},
+                                 settings=racing())
+
+    assert call.value.text == "one host" and slow.calls == 1 and len(built) == 1

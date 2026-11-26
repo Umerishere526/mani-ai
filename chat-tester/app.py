@@ -8,15 +8,15 @@ import json
 import os
 import uuid
 
-import requests
 import streamlit as st
 
 import client as mani
 from admin_view import render_admin
-from library import render_library
+from library import open_topic, render_library
 import crisis_pause
 import session_store
 import trace_view
+import understanding_view
 from copy_button import copy_button
 from login import render_account, render_login, render_nickname
 
@@ -186,6 +186,7 @@ with st.sidebar:
         st.rerun()
     if st.button("📚 Library", use_container_width=True):
         st.session_state.view = "library"
+        open_topic(None)
         st.rerun()
 
 client: mani.ManiClient = st.session_state.client
@@ -277,15 +278,15 @@ def edit_last(content: str) -> None:
     try:
         message_id = client.last_user_message_id(thread_id)
         turn = client.edit_message(thread_id, message_id, content)
-    except mani.ApiError as exc:
-        if not crisis_pause.note(exc.body):
-            notify(refusal_text(exc))
-        return
-    except requests.exceptions.RequestException:
+    except mani.BackendUnreachable:
         notify(
             f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
             "Reopen the chat to see whether the edit went through before trying again."
         )
+        return
+    except mani.ApiError as exc:
+        if not crisis_pause.note(exc.body):
+            notify(refusal_text(exc))
         return
     st.session_state.editing = False
     st.session_state.pop("edit_text", None)
@@ -418,7 +419,7 @@ def show_started(content: str, started: dict) -> None:
     # from what was just sent instead: asking again would make a second conversation.
     try:
         history = client.full_history(started["thread"]["id"])
-    except (mani.ApiError, requests.exceptions.RequestException):
+    except mani.ApiError:
         reset_thread_state(started["thread"], st.session_state.messages)
         record_turn(content, started["turn"])
         return
@@ -445,6 +446,14 @@ def deliver(content: str) -> None:
             started = client.start_thread(content, st.session_state.draft_style, first_message_id(content))
         else:
             turn = client.send_message(thread_id, content)
+    except mani.BackendUnreachable:
+        # No answer at all within the request timeout, or the backend unreachable. The turn may still
+        # finish on the backend, so reopening the chat can show its reply.
+        st.session_state.send_error = (
+            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
+            "Reopen the chat to see whether the reply arrived before sending again."
+        )
+        return
     except mani.ApiError as exc:
         # A pause is shown by the pop-up on the next run, so there is no error to queue for it.
         if not crisis_pause.note(exc.body):
@@ -454,14 +463,6 @@ def deliver(content: str) -> None:
         # The message was not stored, so it goes back into the composer to send again rather than vanishing from
         # the chat (Lolly, 2026-11-03: "it deleted my answer").
         st.session_state.composer_draft = content
-        return
-    except requests.exceptions.RequestException:
-        # No answer at all within the request timeout, or the backend unreachable. The turn may still
-        # finish on the backend, so reopening the chat can show its reply.
-        st.session_state.send_error = (
-            f"No reply within {mani.REQUEST_TIMEOUT_SECONDS} seconds, or the backend is not reachable. "
-            "Reopen the chat to see whether the reply arrived before sending again."
-        )
         return
     if thread is None:
         show_started(content, started)
@@ -494,6 +495,7 @@ if buttons and not pending and paused is None:
         if col.button(button["label"], use_container_width=True, key=f"tap_{index}_{len(st.session_state.messages)}"):
             if button.get("library"):
                 st.session_state.view = "library"
+                open_topic(button["library"])
             elif thread is None:
                 tap_style(button["label"])
             else:
@@ -549,16 +551,8 @@ elif submitted and submitted.text:
 
 with st.sidebar:
     st.divider()
-    st.subheader("🧾 What Mani knows")
-    # Mani's notes for its next turn, and the frameworks this conversation declined or finished, as the backend stored
-    # them after the last reply. Sent by the backend only while AI_DEBUG_MODE is on.
-    record = (last_turn or {}).get("understanding")
-    if record:
-        for key, label in (("notes", "Notes"), ("declined", "Declined"), ("finished", "Finished")):
-            if value := record.get(key):
-                st.markdown(f"**{label}:** {' | '.join(value) if isinstance(value, list) else value}")
-    else:
-        st.caption("Nothing yet, or AI_DEBUG_MODE is off in the backend.")
+    # The thread record as the backend stored it after the last reply, sent only while AI_DEBUG_MODE is on.
+    understanding_view.render((last_turn or {}).get("understanding"))
 
     st.divider()
     # The person's conversations, newest activity first. Tapping one opens it to continue; the

@@ -1,32 +1,31 @@
-// ABOUTME: Exercise library UI shapes, mirroring @mani/api's exercise/topic schemas by
-// ABOUTME: structure only (no zod, no backend import) — this app has no API layer yet.
-
-export type TopicId =
-  | 'EmotionalIntelligence'
-  | 'NarcissisticDynamics'
-  | 'BuildingHabits'
-  | 'Boundaries'
-  | 'Anxiety'
-  | 'Burnout';
-
-export const TOPICS: readonly { id: TopicId; label: string }[] = [
-  { id: 'EmotionalIntelligence', label: 'Emotional Intelligence' },
-  { id: 'NarcissisticDynamics', label: 'Narcissistic Dynamics' },
-  { id: 'BuildingHabits', label: 'Building Habits' },
-  { id: 'Boundaries', label: 'Boundaries' },
-  { id: 'Anxiety', label: 'Anxiety' },
-  { id: 'Burnout', label: 'Burnout' },
-];
-
-export type ExerciseType = 'Breathing' | 'Meditation' | 'Visualization';
+// ABOUTME: The exercise library's shapes as the screens use them, mapped from the backend's ExerciseOut and TopicOut
+// ABOUTME: by lib/api/exercises.ts.
 
 export interface Exercise {
   id: string;
   title: string;
   description: string;
   subtitle: string | null;
-  type: ExerciseType;
-  category: TopicId | null;
-  durationMinutes: number;
+  type: string | null;
+  category: string;
+  /** Set when a topic lists this exercise from another topic: the group it is shown under there. */
+  subcategory: string | null;
+  /** Rounded by the API to the nearest 30 seconds; null when it has no length yet. */
+  durationMinutes: number | null;
+  /** False until the client records it: listed as coming soon, with no audio. */
+  recorded: boolean;
   audioUrl: string | null;
+}
+
+/** A library topic; its id is the `category` its own exercises carry. */
+export interface Topic {
+  id: string;
+  title: string;
+  blurb: string;
+}
+
+/** A topic's exercises under one subcategory heading; `subcategory` null is the topic's own. */
+export interface ExerciseGroup {
+  subcategory: string | null;
+  exercises: Exercise[];
 }

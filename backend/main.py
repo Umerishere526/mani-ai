@@ -2,6 +2,7 @@
 # ABOUTME: Run with `fastapi dev main.py` from the backend directory.
 
 import logging
+import warnings
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
 
@@ -32,6 +33,9 @@ from mani.routers import (
 
 logger = logging.getLogger(__name__)
 
+# The one third-party warning a chat reply raises, matched as pytest.ini matches it.
+PARSED_SERIALIZER_WARNING = r"(?s).*field_name='parsed'"
+
 
 def error_body(category: ErrorCategory, message: str, retryable: bool, details: dict | None = None) -> dict:
     """The single error shape every client branches on."""
@@ -39,6 +43,14 @@ def error_body(category: ErrorCategory, message: str, retryable: bool, details: 
     if details is not None:
         body["details"] = details
     return {"error": body}
+
+
+def error_response(exc: ServiceError) -> JSONResponse:
+    """A ServiceError as the response a client receives: its category's status, its safe sentence."""
+    return JSONResponse(
+        status_code=exc.status_code,
+        content=error_body(exc.category, exc.user_message, exc.retryable, exc.details),
+    )
 
 
 def _what_to_fix(errors: list) -> str | None:
@@ -84,6 +96,10 @@ def create_app() -> FastAPI:
         format="%(asctime)s %(levelname)s %(name)s: %(message)s",
     )
 
+    # langchain-openai's structured stream serializes a chunk whose `parsed` field it types as None; pydantic warns on
+    # every chat reply, and the warning quotes the reply (`input_value=`). The reply is intact and the cause upstream.
+    warnings.filterwarnings("ignore", message=PARSED_SERIALIZER_WARNING, category=UserWarning)
+
     if settings.sentry_dsn:
         sentry_sdk.init(
             dsn=settings.sentry_dsn,
@@ -122,10 +138,18 @@ def create_app() -> FastAPI:
             # incident. Logging a stack trace for each would bury real faults under
             # routine noise and spend the Sentry quota on it.
             logger.warning("%s: %s", exc.category, exc)
-        return JSONResponse(
-            status_code=exc.status_code,
-            content=error_body(exc.category, exc.user_message, exc.retryable, exc.details),
-        )
+        return error_response(exc)
+
+    @app.exception_handler(Exception)
+    async def unhandled_error_handler(_: Request, exc: Exception) -> JSONResponse:
+        """Give a fault nothing anticipated the same error shape, not Starlette's plain-text 500.
+
+        Starlette re-raises the exception once this response is sent, so Sentry still reports it.
+        Only the type is logged beside the traceback: the message of an exception nobody wrote
+        could carry anything, and the client is told only the generic sentence.
+        """
+        logger.error("unhandled %s", type(exc).__name__, exc_info=exc)
+        return error_response(ServiceError(f"unhandled {type(exc).__name__}"))
 
     @app.exception_handler(RequestValidationError)
     async def validation_error_handler(

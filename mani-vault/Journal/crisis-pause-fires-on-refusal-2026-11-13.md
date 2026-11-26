@@ -10,6 +10,7 @@ failed:
   - "Tried defining declined in its description alone; failed because the model read 'you already said this' as declined"
   - "Tried loading only the conversation's own pause; failed because it hid a later pause from one that answered its own"
 ---
+> Superseded 2026-11-25 — see [[return-check-only-in-the-paused-conversation-2026-11-25]] (every conversation asking about the person's latest pause, and loading both pauses)
 > Superseded 2026-11-19 — see [[crisis-pause-one-rule-and-the-worry-forgets-its-kind-2026-11-19]] (the `own_pause` lookup that kept the paused conversation asking)
 > Superseded 2026-11-14 — see [[pause-needs-no-refusal-for-suicide-2026-11-14]] (the refusal as a gate for every kind of danger; it stays for the body)
 

@@ -5,10 +5,10 @@
 
 import { useState } from "react";
 import { useRouter } from "next/navigation";
-import { useForm } from "react-hook-form";
+import { useForm, useWatch } from "react-hook-form";
 import { zodResolver } from "@hookform/resolvers/zod";
 import { promptFormSchema, type PromptFormValues } from "@/lib/schema";
-import { useProviderModels } from "@/hooks/use-provider-models";
+import { createPrompt, updatePrompt } from "@/lib/actions/prompts";
 import type { Prompt } from "@/types";
 import dictionary from "@/dictionaries/en.json";
 import { isModelPrompt } from "./is-model-prompt";
@@ -32,53 +32,31 @@ export function PromptForm({ prompt, mode }: PromptFormProps) {
   const {
     register,
     handleSubmit,
-    watch,
-    setValue,
+    control,
     formState: { errors, isSubmitting },
   } = useForm<PromptFormValues>({
     resolver: zodResolver(promptFormSchema),
     defaultValues: {
       name: prompt?.name ?? "",
-      type: prompt?.type ?? "system",
       description: prompt?.description ?? "",
       content: prompt?.content ?? "",
-      provider: prompt?.provider ?? "",
       modelId: prompt?.modelId ?? "",
       modelParameters: JSON.stringify(prompt?.modelParameters ?? {}, null, 2),
       changeSummary: "",
     },
   });
 
-  const selectedProvider = watch("provider");
-  const currentModelId = watch("modelId");
-  const promptName = watch("name");
+  const promptName = useWatch({ control, name: "name" });
   const showModelConfig = isModelPrompt(prompt?.name ?? promptName);
-
-  const { providers, models, loadingProviders, loadingModels, modelsError } =
-    useProviderModels(
-      selectedProvider,
-      currentModelId,
-      (name) => {
-        if (!prompt?.provider) setValue("provider", name);
-      },
-      (id) => setValue("modelId", id),
-    );
-
-  const isProviderValid =
-    !selectedProvider || providers.some((p) => p.name === selectedProvider);
 
   const onSubmit = async (data: PromptFormValues) => {
     setSubmitError(null);
-
-    try {
-      // No backend yet — see Stage 4 plan in the mani-mobile-ui-port journal precedent.
-      console.log("prompt form submit", { mode, promptId: prompt?.id, data });
-
-      router.push("/admin/prompts");
-      router.refresh();
-    } catch (err) {
-      setSubmitError(err instanceof Error ? err.message : STRINGS.genericError);
+    const result = mode === "create" ? await createPrompt(data) : await updatePrompt(prompt?.id ?? "", data);
+    if (result.error) {
+      setSubmitError(result.error);
+      return;
     }
+    router.push("/admin/prompts");
   };
 
   return (
@@ -93,18 +71,7 @@ export function PromptForm({ prompt, mode }: PromptFormProps) {
       <PromptContentField register={register} errors={errors} />
 
       {showModelConfig && (
-        <PromptModelFields
-          register={register}
-          errors={errors}
-          providers={providers}
-          models={models}
-          loadingProviders={loadingProviders}
-          loadingModels={loadingModels}
-          modelsError={modelsError}
-          selectedProvider={selectedProvider}
-          currentModelId={currentModelId}
-          isProviderValid={isProviderValid}
-        />
+        <PromptModelFields register={register} errors={errors} />
       )}
 
       {mode === "edit" && (

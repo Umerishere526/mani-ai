@@ -1,0 +1,69 @@
+# ABOUTME: The conversation regression suite on demand: a throwaway local Supabase in the runner, seeded from content/,
+# ABOUTME: then evals/regress.py with real model calls. Started by hand only, because every run spends OpenRouter credit.
+name: conversation regression (live)
+
+on:
+  workflow_dispatch:
+    inputs:
+      scenario:
+        description: "Scenario ids, space-separated (empty = all)"
+        required: false
+        default: ""
+      only:
+        description: "One group: framework, pacing, safety, isolation (empty = all)"
+        required: false
+        default: ""
+      judge:
+        description: "Run the judged quality layer"
+        type: boolean
+        default: true
+
+jobs:
+  regression:
+    runs-on: ubuntu-latest
+    timeout-minutes: 60
+    defaults:
+      run:
+        working-directory: backend
+    steps:
+      - uses: actions/checkout@v4
+      - uses: actions/setup-python@v5
+        with:
+          python-version: "3.14"
+          cache: pip
+          cache-dependency-path: backend/requirements*.txt
+      - uses: supabase/setup-cli@v1
+        with:
+          version: latest
+      - run: pip install -r requirements-dev.txt
+      # Applies supabase/migrations to a fresh local project; nothing hosted is touched.
+      - run: supabase start
+      - name: Point the backend at the local project
+        run: |
+          supabase status -o env > /tmp/sb.env
+          set -a; . /tmp/sb.env; set +a
+          {
+            echo "DATABASE_URL=$DB_URL"
+            echo "SUPABASE_URL=$API_URL"
+            echo "SUPABASE_SERVICE_ROLE_KEY=$SERVICE_ROLE_KEY"
+            echo "SUPABASE_ANON_KEY=$ANON_KEY"
+            echo "SUPABASE_JWT_SECRET=$JWT_SECRET"
+          } >> "$GITHUB_ENV"
+      - run: python scripts/seed.py
+      - name: Run the suite
+        env:
+          OPENROUTER_API_KEY: ${{ secrets.OPENROUTER_API_KEY }}
+        run: |
+          args=(--cost)
+          for id in ${{ inputs.scenario }}; do args+=(--scenario "$id"); done
+          [ -n "${{ inputs.only }}" ] && args+=(--only "${{ inputs.only }}")
+          [ "${{ inputs.judge }}" = "true" ] || args+=(--no-judge)
+          python evals/regress.py "${args[@]}"
+      - name: Report in the job summary
+        if: always()
+        run: cat evals/results/regress-latest.md >> "$GITHUB_STEP_SUMMARY" || true
+      - uses: actions/upload-artifact@v4
+        if: always()
+        with:
+          name: regression-results
+          path: backend/evals/results/

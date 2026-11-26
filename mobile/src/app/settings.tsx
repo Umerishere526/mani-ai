@@ -1,29 +1,25 @@
-import { useState } from "react";
+// ABOUTME: Settings screen — notification preference, account rows (password, email, delete),
+// ABOUTME: the AI disclosure, and Log Out, which ends the session so the guard returns to sign-in.
+
 import { router } from "expo-router";
 import { StatusBar } from "expo-status-bar";
 import { ScrollView, View } from "react-native";
 import { LinearGradient } from "expo-linear-gradient";
-import { AppHeader, SecondaryButton, Text } from "@/components/shared";
+import { AiDisclosure, AppHeader, SecondaryButton, Text } from "@/components/shared";
 import { SettingsRow, SettingsSection } from "@/components/settings";
 import { colors } from "@/lib/tokens";
 import { useNotificationPreference } from "@/hooks/useNotificationPreference";
 import { useStatusBarStyle } from "@/hooks/useStatusBarStyle";
+import { useAsyncAction } from "@/hooks/useAsyncAction";
+import { sessionManager } from "@/lib/api";
 import en from "@/dictionaries/en.json";
 
 export default function SettingsScreen() {
   const { isEnabled: notificationsEnabled, toggle: toggleNotifications } = useNotificationPreference();
-  const [isSigningOut, setIsSigningOut] = useState(false);
+  const signOut = useAsyncAction(() => sessionManager.signOut());
   const isAnonymous = false;
 
   useStatusBarStyle("light");
-
-  const handleSignOut = () => {
-    setIsSigningOut(true);
-    setTimeout(() => {
-      setIsSigningOut(false);
-      router.replace("/");
-    }, 400);
-  };
 
   return (
     <View className="flex-1">
@@ -62,15 +58,23 @@ export default function SettingsScreen() {
               accessory="chevron"
               onPress={() => router.push("/change-email")}
             />
+            <SettingsRow
+              icon="trash-2"
+              label={en.settings.deleteAccount}
+              accessory="chevron"
+              onPress={() => router.push("/delete-account")}
+            />
           </SettingsSection>
         )}
 
         <View className="min-h-8 flex-1" />
 
+        <AiDisclosure className="mb-6" />
+
         <SecondaryButton
-          label={isSigningOut ? en.settings.loggingOut : en.settings.logOut}
-          onPress={handleSignOut}
-          disabled={isSigningOut}
+          label={signOut.isRunning ? en.settings.loggingOut : en.settings.logOut}
+          onPress={() => signOut.run()}
+          disabled={signOut.isRunning}
         />
       </ScrollView>
 

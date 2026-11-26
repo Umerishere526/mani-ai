@@ -13,6 +13,7 @@ sys.path.insert(0, str(pathlib.Path(__file__).resolve().parent.parent))
 
 from mani.chat.techniques import OFFERING  # noqa: E402
 from mani.config import get_settings  # noqa: E402
+from mani.db.config_tables import SNAPSHOT_PROMPT  # noqa: E402
 from mani.models.rows import SupportStyle  # noqa: E402
 
 # Authored content, not code: markdown is the input this script loads, and once loaded the
@@ -83,20 +84,50 @@ def parse_framework(path: pathlib.Path) -> dict:
 
 def missing_for_activation(framework: dict) -> list[str]:
     """What an active framework lacks of the content a turn reads, named by its path in the file: each style's
-    five steps, the worked example, and each stage's line, purpose and when it is answered. Empty when it can be seeded active,
+    five steps, and each stage's line, purpose and when it is answered. Empty when it can be seeded active,
     so a paused framework moved back fails here, not in a live chat."""
     stages = framework["stages"]
     offering = stages.get(OFFERING) or {}
     missing = [f"stages.offering.explain.{style.value}" for style in SupportStyle
                if not (offering.get("explain") or {}).get(style.value)]
-    if not offering.get("example"):
-        missing.append("stages.offering.example")
     for phase in framework["phases"]:
         if phase == OFFERING:
             continue
         stage = stages.get(phase) or {}
         missing += [f"stages.{phase}.{key}" for key in ("intro", "purpose", "ready_when") if not stage.get(key)]
     return missing
+
+
+async def seed_prompt(conn: asyncpg.Connection, prompt: dict, source: str) -> int:
+    """Write one prompt file's row and return its live version. When the text, model, parameters or routing differ
+    from the row, the row as it stood goes into admin.prompt_versions first and the version moves on, as an edit in
+    the portal does, so the history says which prompt was live when."""
+    model_parameters = json.dumps(prompt["model_parameters"])
+    routing = json.dumps(prompt["routing"])
+    replaced = await conn.fetchval(
+        "select id from admin.prompts where name = $1 and (content, model_id, model_parameters, routing) "
+        "is distinct from ($2, $3, $4::jsonb, $5::jsonb)",
+        prompt["name"], prompt["content"], prompt["model_id"], model_parameters, routing,
+    )
+    if replaced is not None:
+        await conn.execute(SNAPSHOT_PROMPT, replaced, f"replaced by the seed of {source}", None)
+    return await conn.fetchval(
+        """
+        insert into admin.prompts
+            (id, name, description, content, model_id, model_parameters, routing)
+        values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb, $7::jsonb)
+        on conflict (name) do update set
+            description = excluded.description,
+            content = excluded.content,
+            model_id = excluded.model_id,
+            model_parameters = excluded.model_parameters,
+            routing = excluded.routing,
+            version = admin.prompts.version + $8::int
+        returning version
+        """,
+        prompt["id"], prompt["name"], prompt["description"], prompt["content"], prompt["model_id"],
+        model_parameters, routing, 1 if replaced is not None else 0,
+    )
 
 
 async def seed() -> None:
@@ -157,27 +188,8 @@ async def seed() -> None:
 
             for path in files:
                 prompt = parse_prompt(path)
-                await conn.execute(
-                    """
-                    insert into admin.prompts
-                        (id, name, description, content, model_id, model_parameters, routing)
-                    values (coalesce($1::uuid, gen_random_uuid()), $2, $3, $4, $5, $6::jsonb, $7::jsonb)
-                    on conflict (name) do update set
-                        description = excluded.description,
-                        content = excluded.content,
-                        model_id = excluded.model_id,
-                        model_parameters = excluded.model_parameters,
-                        routing = excluded.routing
-                    """,
-                    prompt["id"],
-                    prompt["name"],
-                    prompt["description"],
-                    prompt["content"],
-                    prompt["model_id"],
-                    json.dumps(prompt["model_parameters"]),
-                    json.dumps(prompt["routing"]),
-                )
-                print(f"  {prompt['name']:<18} {len(prompt['content']):>6} chars")
+                version = await seed_prompt(conn, prompt, f"content/prompts/{path.name}")
+                print(f"  {prompt['name']:<18} {len(prompt['content']):>6} chars  v{version}")
             print(f"prompts: {len(files)}")
             # Prompts no turn reads any more. Named rather than "every row with no file", so a prompt made in the
             # portal is never switched off.

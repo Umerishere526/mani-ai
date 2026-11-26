@@ -51,18 +51,21 @@ def greeting(nickname: str | None, returning: bool) -> str:
 # 2026-11-04: a pasted reply was taken as an answer and the offer followed). Fixed, so it costs no model call.
 COPIED_BACK = "It looks like you've sent my last message back to me. What did you want to say?"
 
-# The client's buttons at each step of an offer (her sequence document, 2026-11-18), always set by code. Any of the
-# lead-in's three shows the five steps; Talk more first sets the offer aside for now.
-LEAD_IN_LABELS = ("Not sure", "Show me how", "Give me a tool")
-EXAMPLE_LABEL = "I need an example"
+# The client's buttons at each step of an offer (her sequence document, 2026-11-18), always set by code. The lead-in's
+# three are three different experiences (Lolly, 2026-11-20): Not sure explains the five steps, Show me how walks them
+# on the person's own situation, Give me a tool starts the first stage. Talk more first sets the offer aside for now.
+NOT_SURE_LABEL = "Not sure"
+SHOW_ME_HOW_LABEL = "Show me how"
+GIVE_ME_A_TOOL_LABEL = "Give me a tool"
+LEAD_IN_LABELS = (NOT_SURE_LABEL, SHOW_ME_HOW_LABEL, GIVE_ME_A_TOOL_LABEL)
 TALK_MORE_FIRST_LABEL = "Talk more first"
-# How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18;
-# the words changed by muhammad, 2026-11-24: "Still a bit tired" put a feeling in their mouth).
+# How they feel after a framework's last stage, asked before the close (the client's sequence document, 2026-11-18).
+# muhammad's wording (2026-11-25), as on main; it overrules Lolly's 2026-11-23 ask that one option say it did not
+# help (see docs/client/requirements.md, Conflicts): "I'm not sure yet" is the one that does not presume it helped.
 FEELINGS_LABELS = ("Feel stronger", "Feel more focused", "I'm not sure yet")
-# The three choices after a framework's last stage, in the client's words.
-CLOSING_KEEP_CHATTING_LABEL = "Keep Chatting"
-GO_TO_LIBRARY_LABEL = "Go to Library"
-FINISH_LABEL = "Finish for Now"
+# The close, in the client's words (Lolly, 2026-11-20: "CONTINUE CHATTING OR VISIT LIBRARY").
+CONTINUE_CHATTING_LABEL = "Continue chatting"
+VISIT_LIBRARY_LABEL = "Visit library"
 
 
 def start_label(framework_name: str) -> str:

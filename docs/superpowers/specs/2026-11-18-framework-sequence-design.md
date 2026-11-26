@@ -1,3 +1,5 @@
+> **Historical** (marked 2026-11-25): a design or plan as written at the time; parts no longer match the code (the return check after a pause, for one, is gone). What the backend does today is in `backend/PORT-STATUS.md`.
+
 # The framework runs the way the client's sequence document shows
 
 Branch: `feat/one-call-turn` (muhammad tests on the branch, then opens the PR and merges himself).

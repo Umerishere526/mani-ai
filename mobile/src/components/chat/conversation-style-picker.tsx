@@ -1,31 +1,37 @@
-// ABOUTME: The greeting screen shown before a chat has a conversation style — lets the user
-// ABOUTME: pick Directive, Supportive, or Reflective, which sets Mani's tone for the thread.
+// ABOUTME: The greeting screen shown before a chat has a conversation style: the backend's greeting and the styles
+// ABOUTME: it offers (Directive, Supportive, Reflective), which set Mani's tone for the thread.
 
-import { View } from 'react-native';
+import { ScrollView, View } from 'react-native';
 import en from '@/dictionaries/en.json';
+import type { StyleOption } from '@/types/chat-api';
 import type { ConversationStyle } from '@/types/chat';
-import { Text } from '@/components/shared';
+import { AiDisclosure, Text } from '@/components/shared';
 import { ConversationStyleOption } from './conversation-style-option';
 
 export interface ConversationStylePickerProps {
+  greeting: string;
+  options: StyleOption[];
+  defaultStyle?: ConversationStyle | null;
   onSelect: (style: ConversationStyle) => void;
 }
 
-const STYLES: ConversationStyle[] = ['directive', 'supportive', 'reflective'];
-
-export function ConversationStylePicker({ onSelect }: ConversationStylePickerProps) {
+export function ConversationStylePicker({ greeting, options, defaultStyle, onSelect }: ConversationStylePickerProps) {
   return (
-    <View className="flex-1 items-center justify-center gap-8 px-6">
-      <View className="items-center gap-3">
-        <Text className="font-sans-semibold text-xl">{en.chat.styleGreeting}</Text>
-        <Text className="text-center text-base text-secondary-600">{en.chat.stylePrompt}</Text>
-      </View>
+    <ScrollView className="flex-1" contentContainerClassName="grow items-center justify-center gap-8 px-6">
+      <Text className="text-center font-sans-semibold text-xl">{greeting}</Text>
 
       <View className="w-full gap-4" accessibilityLabel={en.chat.styleOptionsLabel}>
-        {STYLES.map((style) => (
-          <ConversationStyleOption key={style} style={style} onPress={onSelect} />
+        {options.map((option) => (
+          <ConversationStyleOption
+            key={option.style}
+            style={option.style}
+            selected={option.style === defaultStyle}
+            onPress={onSelect}
+          />
         ))}
       </View>
-    </View>
+
+      <AiDisclosure />
+    </ScrollView>
   );
 }

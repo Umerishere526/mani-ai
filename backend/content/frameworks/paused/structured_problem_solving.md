@@ -1,12 +1,13 @@
 ---
 id: structured_problem_solving
-name: Structured Problem-Solving
+name: Structured Problem Solving
 summary: "We'll go through a few focused questions. By the end, you will have turned a problem that feels unclear into a practical next step."
 display_order: 4
-phases: [offering, problem, facts, control, outcome, options, compare, select, first_action, closing]
+phases: [offering, problem, facts, control, outcome, options, compare, select, first_action]
 activation:
   central_indication: >-
-    The user faces a practical problem and needs help determining what to do.
+    The user faces a practical problem that a decision or an action could change, does not know
+    what to do, and wants to work out a plan for it.
   to_find_out:
     - "the practical problem, in one sentence"
     - "that they want a decision or a plan for it, not to understand it or to feel differently about it"
@@ -35,27 +36,13 @@ activation:
     - "The user is close to acting impulsively"
     - "A safety concern requires the approved safety protocol"
   contraindications:
-    - "The decision requires professional expertise MANI cannot provide - a medical treatment plan, a legal conclusion, an investment or financial decision. Mani may help the person work out who could advise them, and must not replace qualified judgment"
+    - "The decision needs professional expertise Mani cannot give, such as a medical treatment plan, a legal conclusion, or an investment or financial decision. Mani may help the person work out who could advise them, and never replaces qualified judgment"
     - "The plan would be retaliation, deception, an unsafe confrontation, or harm to the person or someone else"
-    - "The situation is abuse, a threat, or emergency danger - it is never a communication problem or an ordinary decision, and the safety protocol applies, not a plan"
+    - "The situation is abuse, a threat, or emergency danger. It is never a communication problem or an ordinary decision: the safety protocol applies, not a plan"
   redirects:
-    - signal: "I know what to do, but I cannot make myself begin."
-      instead: behavioral_activation
     - signal: "I know my manager will think I am incompetent."
       instead: thought_reframe
-    - signal: "There is nothing I can do to change the outcome."
-      instead: act_choice_point
-    - signal: "I am about to send a message I will regret."
-      instead: dbt_stop
   distinctions:
-    behavioral_activation: >-
-      Structured Problem-Solving when the user does not know what to do, options need
-      generating or comparing, a decision is required. Behavioral Activation when they already
-      know what they could do, beginning is the barrier, and they need one manageable action.
-    act_choice_point: >-
-      Structured Problem-Solving when the problem can be influenced through action. ACT when the
-      outcome remains outside control, facts remain uncertain, no practical solution resolves
-      the central difficulty, or the user needs to choose how to respond.
     thought_reframe: >-
       Structured Problem-Solving when the user needs a plan. Reframe when one interpretation is
       preventing the user from seeing the situation accurately.
@@ -64,18 +51,58 @@ activation:
       want to be heard rather than decide, or are not ready to consider action.
 stages:
   offering:
-    purpose: "Mirror the identified problem and ask one permission question, once the problem and the wish for a plan are understood."
+    purpose: "Once the problem and the wish for a plan are understood, offer it in a brief lead-in that names Structured Problem Solving and says how it would help with what they want, asking nothing after it: the app shows the buttons."
     boundaries:
       - "must not define the problem without the user"
       - "must not decide what outcome the user should want"
     if_unclear:
       - when: "the user declines"
         reply: "You do not want to work through a plan right now. What would be most helpful to discuss?"
-    ask:
-      supportive: "Several parts of this problem are competing for your attention. Would it help to take them one at a time?"
-      reflective: "The facts, assumptions, and possible decisions are connected right now. Would it help to separate them?"
-      directive: "You want a clear decision and first action. Would you like to work through the options?"
+    # The client's eight stages, each with that stage's question for the style (its `ask` below), closed by the same
+    # ready question as ABCDE's five steps. Ours until the client supplies her own.
+    explain:
+      directive: |-
+        Structured Problem Solving has eight steps:
+
+        1. Define the Problem: What is the exact problem you want to resolve?
+        2. Separate Facts from Assumptions: What do you know for certain?
+        3. Identify What Is in Your Control: Which part is within your control?
+        4. Establish the Outcome: What do you want your response to accomplish?
+        5. Generate Possible Responses: What are your possible responses?
+        6. Compare the Responses: What are the strengths and limitations of each?
+        7. Select One Response: Which response best fits what you want to accomplish?
+        8. Identify the First Action: What is the first action?
+
+        Ready to dive into a real life situation?
+      supportive: |-
+        Structured Problem Solving has eight steps. Together they help you turn a problem that feels unclear into one practical next step.
+
+        1. Define the Problem: What is the part you most want to sort out?
+        2. Separate Facts from Assumptions: What do you know for sure so far?
+        3. Identify What Is in Your Control: Which part of this is in your hands?
+        4. Establish the Outcome: What would you like your response to do for you?
+        5. Generate Possible Responses: What are some things you could do, even small ones?
+        6. Compare the Responses: What do you like and not like about each one?
+        7. Select One Response: Which one fits best with what you want?
+        8. Identify the First Action: What is a first step that feels doable?
+
+        Would you like to try diving into a real life situation together?
+      reflective: |-
+        Structured Problem Solving has eight steps that help you separate the facts, your choices and what you want, one at a time.
+
+        1. Define the Problem: When you narrow it down, what is the problem you want to resolve?
+        2. Separate Facts from Assumptions: What do you know for certain, and what are you still guessing?
+        3. Identify What Is in Your Control: When you look at it, which part can you influence?
+        4. Establish the Outcome: What would a good outcome look like to you?
+        5. Generate Possible Responses: What responses can you see open to you?
+        6. Compare the Responses: What would each of these bring, and what would it cost?
+        7. Select One Response: Which response fits best with what you want to accomplish?
+        8. Identify the First Action: What would beginning look like?
+
+        Are you ready to dive into a real life situation?
   problem:
+    title: "Define the Problem"
+    intro: "Step 1 is Define the Problem."
     purpose: "Reduce a broad difficulty to one specific problem."
     listen_for: "One specific problem rather than several connected problems."
     ready_when: "One specific problem is named. If several, the user chooses which one."
@@ -85,23 +112,25 @@ stages:
       - "must not select the priority without the user"
       - "must not turn an interpretation into a fact"
     if_unclear:
-      - when: "too broad - \"Everything is falling apart.\""
+      - when: "too broad: \"Everything is falling apart.\""
         reply: "Several problems are happening at once. Which one requires attention first?"
       - when: "several combined"
         reply: "The deadline, your coworker, and your manager are separate concerns. Which one do you want to resolve first?"
-      - when: "framed as unsolvable rather than named - \"There's no way to fix this, I could never figure it out.\""
+      - when: "framed as unsolvable rather than named: \"There's no way out of this, I could never figure it out.\""
         reply: "It feels unsolvable right now. What is the actual problem underneath that?"
       - when: "what they describe is abuse, a threat, or emergency danger"
         reply: "What is happening sounds serious, and staying safe comes first. What would be most helpful to talk through?"
       - when: "the problem is a medical, legal, or financial decision that needs a qualified professional"
-        reply: "That decision needs someone qualified to advise. Would it help to think through who could help you with it?"
-      - when: "they have already described the problem before the stage began - do not ask them to confirm it"
+        reply: "That decision needs someone qualified to advise. Who could you ask about it?"
+      - when: "they have already described the problem before the stage began, so never ask them to confirm it"
         reply: "<their problem, in a clause, in their words>. What do you know for certain about it?"
     ask:
       supportive: "What is the part you most want to sort out?"
       reflective: "When you narrow it down, what is the problem you want to resolve?"
       directive: "What is the exact problem you want to resolve?"
   facts:
+    title: "Separate Facts from Assumptions"
+    intro: "Step 2 is Separate Facts from Assumptions."
     purpose: "Clarify what is known, what is believed, and what remains uncertain."
     listen_for: "Verified information, interpretations, predictions, and missing information."
     ready_when: "What is known, assumed, predicted, and missing is named. The user does not need complete information before continuing."
@@ -111,17 +140,19 @@ stages:
       - "must not dismiss a reasonable prediction"
       - "must not require certainty before continuing"
     if_unclear:
-      - when: "prediction stated as fact - \"My manager is going to fire me.\""
+      - when: "prediction stated as fact: \"My manager is going to fire me.\""
         reply: "You expect your manager to fire you. What has she said or done?"
       - when: "not enough information"
         reply: "Her view is unknown. What information do you have?"
-      - when: "a time critical risk is still open - cards or accounts that can still be used, a deadline about to pass, something that gets worse by the hour"
-        reply: "<the risk, in a clause>. Contacting <whoever can stop it, such as the bank or the police> is usually the first step. Have you been able to reach them?"
+      - when: "a time critical risk is still open: cards or accounts that can still be used, a deadline about to pass, something that gets worse by the hour"
+        reply: "<the risk, in a clause>. Contacting <whoever can stop it, such as the bank or the police> is usually the first step. What has happened when you tried to reach them?"
     ask:
       supportive: "What do you know for sure so far?"
       reflective: "What do you know for certain, and what are you still guessing?"
       directive: "What do you know for certain?"
   control:
+    title: "Identify What Is in Your Control"
+    intro: "Step 3 is Identify What Is in Your Control."
     purpose: "Determine which part the user can influence."
     listen_for: "The decision, communication, boundary, preparation, or action available to the user."
     ready_when: "At least one part within the user's control is named. If nothing can be influenced, this framework may not fit."
@@ -131,15 +162,17 @@ stages:
       - "must not encourage control over an uncontrollable outcome"
       - "must not treat abuse as a mutual communication problem"
     if_unclear:
-      - when: "focuses on another person - \"I need my manager to understand.\""
+      - when: "focuses on another person: \"I need my manager to understand.\""
         reply: "Her understanding depends on her response. What can you control in how you communicate?"
-      - when: "they cannot say what is theirs to do - \"I don't know.\""
+      - when: "they cannot say what is theirs to do: \"I don't know.\""
         reply: "<two or three things that are plausibly theirs to do, in plain words>. Which of those have you already done?"
     ask:
       supportive: "Which part of this is in your hands?"
       reflective: "When you look at it, which part can you influence?"
       directive: "Which part is within your control?"
   outcome:
+    title: "Establish the Outcome"
+    intro: "Step 4 is Establish the Outcome."
     purpose: "Identify what the user wants the response to accomplish."
     listen_for: "A realistic result the user wants their response to support."
     ready_when: "A realistic desired outcome is named. The outcome cannot depend entirely on another person's decision."
@@ -149,15 +182,17 @@ stages:
       - "must not define success as receiving a particular response from someone else"
       - "must not pressure the user toward reconciliation, confrontation, forgiveness, or separation"
     if_unclear:
-      - when: "outcome too broad - \"I want everything fixed.\""
+      - when: "outcome too broad: \"I want everything sorted out.\""
         reply: "You want the entire problem resolved. What would a realistic result from your next response be?"
-      - when: "they cannot say what they want - \"I don't know.\""
-        reply: "I'd say the result you want is <a plain draft of the obvious result for their situation>. Is that right, or is it something else?"
+      - when: "they cannot say what they want: \"I don't know.\""
+        reply: "I'd say the result you want is <a plain draft of the obvious result for their situation>. What would you change in that?"
     ask:
       supportive: "What would you like your response to do for you?"
       reflective: "What would a good outcome look like to you?"
       directive: "What do you want your response to accomplish?"
   options:
+    title: "Generate Possible Responses"
+    intro: "Step 5 is Generate Possible Responses."
     purpose: "Identify realistic options without judging them immediately."
     listen_for: "More than one safe and realistic option when possible."
     ready_when: "More than one possible response is named when more than one exists. No artificial options are required when only one safe response is available."
@@ -165,19 +200,21 @@ stages:
       - "must not produce a long list of advice"
       - "must not present unsafe or unethical options"
       - "must not overwhelm the user"
-      - "must not exclude the user from generating options - but when they cannot name any, offer up to three realistic ones, most urgent first, and ask which feels most doable; never a longer list, never choose for them"
+      - "must not exclude the user from generating options. When they cannot name any, offer up to three realistic ones, most urgent first, and ask which feels most doable. Never a longer list, never choose for them"
       - "must not disguise a recommendation as the user's decision"
-      - "must not accept several options that are really one approach worded differently - real breadth is at least two genuinely different approaches, not variations on the same one"
+      - "must not accept several options that are really one approach worded differently. Real breadth is at least two genuinely different approaches, not variations on the same one"
     if_unclear:
-      - when: "only one option - \"The only thing I can do is quit.\""
+      - when: "only one option: \"The only thing I can do is quit.\""
         reply: "Quitting is the only option you see right now. What other response could address the immediate problem?"
-      - when: "asks MANI to decide, or cannot name any option - \"Tell me what to do.\" / \"I don't know.\" Do not ask for their options again"
+      - when: "asks MANI to decide, or cannot name any option: \"Tell me what to do.\" or \"I don't know.\" Never ask for their options again"
         reply: "You want a direct answer. <Two or three realistic ways to start, in plain words, the most urgent first>. Which one feels most doable?"
     ask:
       supportive: "What are some things you could do, even small ones?"
       reflective: "What responses can you see open to you?"
       directive: "What are your possible responses?"
   compare:
+    title: "Compare the Responses"
+    intro: "Step 6 is Compare the Responses."
     purpose: "Consider the relevant benefits, limitations, risks, and consequences of each option."
     listen_for: "The consequences, limitations, risks, timing, and fit of each response."
     ready_when: "The differences that matter to the decision are named. No exhaustive analysis is required."
@@ -187,15 +224,17 @@ stages:
       - "must not make legal, medical, financial, or professional conclusions"
       - "must not push the option MANI prefers"
     if_unclear:
-      - when: "only benefits named - \"Email is easiest.\""
+      - when: "only benefits named: \"Email is easiest.\""
         reply: "Email is the easiest option for you. What limitation could it have?"
-      - when: "only risks named - \"Every option could go wrong.\""
+      - when: "only risks named: \"Every option could go wrong.\""
         reply: "Every option has a possible downside. Which risk is most manageable?"
     ask:
       supportive: "What do you like and not like about each one?"
       reflective: "What would each of these bring, and what would it cost?"
       directive: "What are the strengths and limitations of each?"
   select:
+    title: "Select One Response"
+    intro: "Step 7 is Select One Response."
     purpose: "Help the user choose the option that best fits the outcome and circumstances."
     listen_for: "The user's own decision and the reason it fits."
     ready_when: "The user has selected their own response. MANI does not make the decision."
@@ -204,97 +243,76 @@ stages:
       - "must not pressure the user to choose quickly"
       - "must not praise one choice in a way that discourages reconsideration"
       - "must not treat uncertainty as failure"
-      - "must not accept an instant pick with no reference to the comparison just made - deciding before weighing the options is the same failure as being unable to decide, just faster, and it is worth one check before moving on"
+      - "must not accept an instant pick with no reference to the comparison just made. Deciding before weighing the options is the same failure as being unable to decide, just faster, and it is worth one check before moving on"
     if_unclear:
       - when: "cannot choose"
         reply: "The decision is still unclear. Which option best supports the outcome you identified?"
     ask:
       supportive: "Which one fits best with what you want?"
-      reflective: "Which response sits best with what you want to accomplish?"
+      reflective: "Which response fits best with what you want to accomplish?"
       directive: "Which response best fits what you want to accomplish?"
   first_action:
+    title: "Identify the First Action"
+    intro: "Step 8 is Identify the First Action."
     purpose: "Turn the selected response into one specific beginning."
     listen_for: "A specific, manageable action within the user's control."
-    ready_when: "One specific and manageable first action is named."
+    ready_when: "One specific and manageable first action is named. They need not have solved the whole problem, know how anyone else will respond, or feel certain."
     boundaries:
       - "must not create a complete project plan"
       - "must not make the first action too large"
       - "must not require immediate completion"
       - "must not select an action outside the user's control"
+      - "must not promise the decision will produce the outcome they want"
     if_unclear:
       - when: "action too large"
-        reply: "Fixing the entire report is a large first action. What is the first manageable part?"
-      - when: "they cannot name a first action - \"I don't know.\""
-        reply: "A small first step could be <one concrete step that follows from what they chose>. Does that feel doable?"
+        reply: "Finishing the entire report is a large first action. What is the first manageable part?"
+      - when: "they cannot name a first action: \"I don't know.\""
+        reply: "A small first step could be <one concrete step that follows from what they chose>. What would make it easier to start?"
     ask:
       supportive: "What is a first step that feels doable?"
       reflective: "What would beginning look like?"
       directive: "What is the first action?"
-  closing:
-    purpose: "Confirm completion in the user's own terms, without promising the decision will produce the desired outcome."
-    ready_when: >-
-      The user has defined the problem, separated facts from assumptions, identified control,
-      established the outcome, generated responses, compared them, selected one, and identified
-      the first action. The user does not need to resolve the entire problem during the
-      conversation, know how another person will respond, eliminate every risk, feel completely
-      certain, complete the action immediately, accept MANI's preferred option, or produce a
-      long-term plan.
-    boundaries:
-      - "must not promise the decision will produce the desired outcome"
-      - "must not summarize the completed framework"
-      - "must not require the user to feel certain to be done"
-      - "must not say the response feels manageable unless the user used similar language"
-    ask:
-      supportive: "You chose a response that feels manageable to you. How is that decision sitting with you?"
-      reflective: "You chose the response that best supports your intended outcome. What changes now that the decision is clearer?"
-      directive: "You selected the response and the first action. Is the plan realistic?"
 ---
 
-# Structured Problem-Solving
+# Structured Problem Solving
 
-Helps the user move from a broad or overwhelming practical problem toward one clear decision and
-one realistic first action. When a problem feels large, the user may combine several problems,
-mix facts with assumptions, focus on what cannot be controlled, struggle to identify the desired
-outcome, generate no options or too many, revisit the problem without deciding, or know the
-options but remain unable to choose. This framework slows the decision process into stages:
-define the exact problem, separate facts from assumptions, identify what is within control,
-establish the desired outcome, generate possible responses, compare them, select one, identify
-the first action. **The purpose is not to solve the problem for the user** - MANI helps the user
-develop and choose their own response.
+Helps the person move from a broad or overwhelming practical problem toward one clear decision and
+one realistic first action. When a problem feels large, they may combine several problems, mix
+facts with assumptions, focus on what cannot be controlled, find it hard to say what outcome they
+want, see no options or too many, go over the problem without deciding, or know the options but
+not be able to choose. The set slows the decision down into stages: define the exact problem,
+separate facts from assumptions, identify what is within their control, establish the outcome they
+want, generate possible responses, compare them, select one, and identify the first action.
+**The purpose is not to solve the problem for them.** MANI helps them develop and choose their own
+response.
 
-**MANI does not define the problem without the user.** MANI does not decide what outcome the
-user should want. **MANI does not choose the solution.** MANI does not provide a long list of
-advice or present one option as risk-free.
+**MANI does not define the problem without them.** MANI does not decide what outcome they should
+want. **MANI does not choose the solution.** MANI does not give a long list of advice or present one
+option as risk free.
 
-**Must not be used to:** create a medical treatment plan, provide legal conclusions, make
-investment or financial decisions for the user, plan retaliation, facilitate deception, plan an
-unsafe confrontation, help the user harm themselves or another person, treat abuse as a
-communication problem, or present emergency danger as an ordinary decision. MANI may help
-identify appropriate professional support; **it must not replace qualified professional
-judgment.**
+**Never used to:** create a medical treatment plan, give legal conclusions, make investment or
+financial decisions for them, plan retaliation, help deceive someone, plan an unsafe confrontation,
+help them harm themselves or another person, treat abuse as a communication problem, or present
+emergency danger as an ordinary decision. MANI may help them find the right professional support,
+and never replaces qualified professional judgment.
 
 ## Stage progression
 
-Define the problem -> Separate facts and assumptions -> Identify control -> Establish the
-outcome -> Generate responses -> Compare responses -> Select one response -> Identify the first
-action -> Complete.
+Define the problem, separate facts and assumptions, identify control, establish the outcome,
+generate responses, compare responses, select one response, identify the first action. The
+feelings check that closes every set follows the last stage.
 
-## Worked example - direct solution tone
+## Worked example, direct solution tone
 
 ```
 User:  I missed the report deadline, and I do not know what to say to my manager.
-
-Offer
-MANI:  You need to address the missed deadline with your manager. Would you like to work
-       through the options?
-User:  Yes.
 
 Problem
 MANI:  What is the exact problem you need to resolve?
 User:  I need to tell her the report is late and explain when I can finish it.
 
 Facts
-MANI:  You need to disclose the delay and provide a new completion date. What do you know for
+MANI:  You need to tell her about the delay and give a new completion date. What do you know for
        certain?
 User:  It was due yesterday, and I can finish it by Thursday.
 MANI:  The deadline was yesterday, and Thursday is realistic. What are you assuming?
@@ -305,7 +323,7 @@ MANI:  You expect to be removed from the project. Which part is within your cont
 User:  I can tell her now, take responsibility, and explain how I will finish.
 
 Outcome
-MANI:  You can communicate now, take responsibility, and provide a plan. What do you want that
+MANI:  You can tell her now, take responsibility, and give a plan. What do you want that
        response to accomplish?
 User:  I want her to know I am addressing it and not hiding the delay.
 
@@ -326,13 +344,6 @@ User:  I will email now and offer to speak.
 First action
 MANI:  You will email now and offer to speak. What is the first action?
 User:  Write the opening sentence and take responsibility for missing the deadline.
-
-Closing
-MANI:  The first action is an opening sentence that takes responsibility. Is that plan realistic?
-User:  Yes. I can write it now.
-
-Somatic
-MANI:  You can begin the email now. What do you notice in your body?
 ```
 
 ## Responses MANI must avoid
@@ -341,14 +352,19 @@ MANI:  You can begin the email now. What do you notice in your body?
 |---|---|---|
 | Standalone mirror | "You have several deadlines." | Not followed by a question |
 | Summary | "You missed the report deadline, believe your manager will remove you, and need to decide whether to call or email." | Retells several stages |
-| Labelling | "You feel overwhelmed and afraid. What should you do?" | Assigns feelings the user did not name |
+| Labelling | "You feel overwhelmed and afraid. What should you do?" | Assigns feelings they did not name |
 | Long explanation | "Large problems often become easier when they are divided into smaller parts..." | Teaches instead of responding |
 | Premature advice | "You should email your manager immediately." | MANI chooses the response |
 | Assumed motive | "Your manager will appreciate your honesty." | Cannot know how she will respond |
 | False certainty | "If you apologize, everything will be fine." | Promises an outcome |
 | Too many options | "You could email, call, schedule a meeting, ask a coworker, contact HR, finish the report tonight, or request an extension." | Overwhelms and takes over option generation |
 | Multiple questions | "What is the problem, what outcome do you want, and what options do you have?" | Several at once |
-| Treating danger as a solvable disagreement | "What are your options for confronting the person who threatened you?" | Immediate danger requires the safety response |
-| Professional overreach | "The legally correct choice is to refuse the agreement." | Must not make legal conclusions |
-| Wrong framework | "What is the smallest part of the report you can complete?" | The user first needs to decide how to address the missed deadline |
-| Wrong tone | "List your options and choose one." | Commanding; may contradict the selected tone |
+| Treating danger as a solvable disagreement | "What are your options for confronting the person who threatened you?" | Immediate danger needs the safety response |
+| Professional overreach | "The legally correct choice is to refuse the agreement." | Never makes legal conclusions |
+| Wrong framework | "What is the smallest part of the report you can complete?" | They first need to decide how to address the missed deadline |
+| Wrong tone | "List your options and choose one." | Commanding, and may not match the chosen style |
+
+## Sources
+
+- The client's SIX FRAMEWORKS document, "Framework Four: Structured Problem-Solving", transcribed in
+  `backend/docs/specs/framework-structured-problem-solving.md`.

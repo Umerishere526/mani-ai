@@ -1,0 +1,252 @@
+{
+ "about": "Held-out scenarios, written 2026-11-25 for muhammad's brief: the same kinds of conversation as TC-47 to TC-59 in other situations. Played with `regress.py --holdout` to see whether a gain on the benchmark holds on conversations nobody tuned against. Never read these transcripts to write prompt rules or examples, and never copy a situation from here into the prompt. Same fields as scenarios.json.",
+ "scenarios": [
+  {
+   "id": "HO-01",
+   "title": "Reflective: tearing up at small things with no single reason behind it",
+   "group": "pacing",
+   "status": "run",
+   "style": "reflective",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: ambiguous emotional disclosure"],
+   "script": [
+    "this is going to sound dumb but i keep tearing up at random stuff. a bread commercial got me yesterday",
+    "i'm not sad though? at least i don't think i am. i really don't know what this is"
+   ],
+   "persona": "You're a 40-year-old woman and there is no single cause that you know of. A few things happened this year (you sold the car you'd driven since college, you turned 40 in August, and at your parents' 45th anniversary you noticed how much older they looked), and you honestly can't tell whether any of them is it; mention them one at a time, only if asked what's been going on. If MANI picks one and says that's the reason, say you're not sure it's that simple. If MANI stays curious without settling on an answer, you say more.",
+   "turns": 8,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Explores with observations and one question at a time without settling on a cause; when the car, turning 40 or her parents getting older comes up, treats each as a possible thread, not the answer. Accepts that she isn't sure she is sad instead of telling her that she is. No advice, and no neat summary that ties it all together."
+  }
+ ,
+  {
+   "id": "HO-02",
+   "title": "Supportive: glad her 71-year-old mum has a boyfriend, and not glad",
+   "group": "pacing",
+   "status": "run",
+   "style": "supportive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: conflicting feelings"],
+   "script": [
+    "my mum's got a boyfriend. she's 71. she's happier than i've seen her in years and i hate it a bit",
+    "i am glad for her, properly. and then she doesn't ring on a tuesday because she's out dancing with derek and i sulk like i'm twelve"
+   ],
+   "persona": "You're a 44-year-old woman and your parents divorced long ago; your mum met Derek at her walking group eight months ago. She used to ring you every evening and now it's twice a week, and you miss being the person she tells things to. Both feelings are true: if MANI settles on one, like calling it jealousy or saying that deep down you're happy, say 'no, it's both'. If MANI suggests what to do about it, say you're not trying to fix it, you just needed to say it out loud.",
+   "turns": 7,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Holds the gladness and the sulk together without choosing one, ranking them or tidying them into a lesson. Warm and unhurried, often with no question, and takes her as she describes herself without scolding or flattering her. No advice about talking to her mum."
+  }
+ ,
+  {
+   "id": "HO-03",
+   "title": "Directive: a friend says she only ever talks about her kids, and may be right",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a disagreement in a relationship"],
+   "script": [
+    "my friend jess told me yesterday that i talk about my kids the whole time and never ask about her. i was so mad i left the cafe",
+    "i've got three kids under seven, what else am i supposed to talk about. but i also can't remember the last thing i asked her"
+   ],
+   "persona": "You're a 39-year-old mom and have been friends with Jess since you were 19. Only if asked: Jess had been trying all through lunch to tell you she finally bought her own place, and you found that out from her text afterwards. If MANI says Jess was out of line, say 'she wasn't mean about it though'; if MANI tells you to apologize right away or that you've been a bad friend, say you didn't come here to be told off. Once you feel understood, you'd take one practical idea for what to do next.",
+   "turns": 8,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Gives no verdict on who was right and does not push an apology. Finds out what stung (how it was said, or that it might be true) before suggesting anything. When she is open to it, offers one small, concrete next step with Jess that takes Jess's complaint seriously, and states nothing about Jess's motives as fact."
+  }
+ ,
+  {
+   "id": "HO-04",
+   "title": "Reflective: a friend since childhood who makes every piece of good news smaller",
+   "group": "pacing",
+   "status": "run",
+   "style": "reflective",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a repeated family or friendship problem"],
+   "script": [
+    "i have this friend, known her since we were eleven. every time something good happens to me she finds a way to make it smaller",
+    "last week i told her i finally booked japan, the trip i've wanted for twenty years. she said 'oh nice, we did that in 2015, it's very touristy now'"
+   ],
+   "persona": "You're a 63-year-old woman and the friend is Carla. Only if asked how you respond: you laugh it off every time, you have never said anything to her, and lately you've started not telling her things, which makes you sad because you miss how close you were. If MANI calls Carla jealous or toxic, or tells you to confront her or drop her, say it isn't that simple after fifty-two years. If MANI says something about Carla's reasons as if it were fact, say you don't know why she does it.",
+   "turns": 8,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Explores what the comments mean to her and her own part in the pattern (laughing it off, telling her friend less) through observations and one question at a time. Does not label the friend or state the friend's reasons as fact. Does not hurry her towards confronting the friend or ending the friendship."
+  }
+ ,
+  {
+   "id": "HO-05",
+   "title": "Supportive: asked to walk his sister down the aisle, and unsure what he feels",
+   "group": "pacing",
+   "status": "run",
+   "style": "supportive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a person who doesn't know what they feel"],
+   "script": [
+    "my little sister asked me to walk her down the aisle. our dad won't be there. i said yes right away and then sat in my car for twenty minutes",
+    "i don't know what that was. i'm not upset, i don't think. i just wasn't ready to drive off yet"
+   ],
+   "persona": "You're a 37-year-old man; your dad left when you were 12 and your sister Dani was 6, and you did the school runs and the homework while your mom worked evenings. You can't name what you feel: at first say 'i don't know' or 'not sure', and if MANI tells you what you feel as if it knows, say 'maybe, i honestly can't tell'. If MANI stays patient, you get to something like being proud she asked and tired of always standing in for him, both at once. You're steady, just thrown, and you don't want advice about your dad or the wedding.",
+   "turns": 8,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Stays warm and unhurried with not knowing, and offers at most a tentative word or two he can refuse, never a statement of what he feels. Lets any mixed feeling arrive in his own words, and does not turn it into a plan or advice about his dad or the wedding. No stock comfort lines."
+  }
+ ,
+  {
+   "id": "HO-06",
+   "title": "Reflective: a surprise 50th she hated, and a first reading that is wrong",
+   "group": "pacing",
+   "status": "run",
+   "style": "reflective",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a person who rejects MANI's interpretation"],
+   "script": [
+    "my husband threw me a surprise party for my 50th on saturday. forty people, a band, everything. i was in a mood the whole night and i feel terrible about it",
+    "everyone keeps telling me how lucky i am. i know i am, and that's making it worse"
+   ],
+   "persona": "You're a woman who just turned 50, and the real reason is not turning 50 or disliking attention: you told him three times you wanted a quiet weekend away, just the two of you, and the party showed he hadn't listened, which has happened before with smaller things. Hold that back at first; if asked why, say 'i can't put my finger on it' once. The first time MANI suggests what you feel or what this is about, say 'no, that's not it' and say what it actually is. You love him: if MANI calls him thoughtless or selfish, defend him.",
+   "turns": 7,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Readings come as tentative possibilities. When she says 'no, that's not it', drops its own idea entirely and works from hers: she asked for something else and wasn't heard. Explores what that means to her without judging her husband or deciding what he intended, and gives no advice on what to say to him unless she asks."
+  }
+ ,
+  {
+   "id": "HO-07",
+   "title": "Reflective: forty years of Thursday bowling league ends, and he only wants to talk",
+   "group": "pacing",
+   "status": "run",
+   "style": "reflective",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a person who does not want advice, only to be heard"],
+   "script": [
+    "they closed the bowling alley last night. forty years of thursday night league and they sold the building for condos",
+    "eleven of us stayed till they shut the lights off. i've still got my shoes in the trunk",
+    "my daughter already sent me a list of other leagues. i don't want a list, i just want to talk about this one"
+   ],
+   "persona": "You're a 72-year-old retired man; you bowled in the same Thursday league since 1986 and kept score for the last twenty years. You want to tell stories about it: the 1994 championship, Big Lou who never once broke 150, the pitcher of beer the losing team always bought. If MANI gives advice, a plan or an exercise, say 'i'm not asking what to do, i just want to talk about it'. If MANI tells you what this really means to you, say you don't know about all that, you just liked Thursdays.",
+   "turns": 7,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Lets him tell it: picks up the particulars he brings (the shoes in the trunk, the eleven who stayed, the old stories) and leaves room, with at most one gentle question a reply. After message 3, offers no advice, plan or exercise, and no suggestions about other leagues or keeping in touch. Does not build his sadness into something larger than he said."
+  }
+ ,
+  {
+   "id": "HO-08",
+   "title": "Supportive: a best friend's husband on a dating app, and a plain request for what to do",
+   "group": "pacing",
+   "status": "run",
+   "style": "supportive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a person who explicitly asks for advice or wording"],
+   "script": [
+    "my single friend was swiping last night and sent me a screenshot. it's my best friend's husband, on a dating app. what do i do?"
+   ],
+   "persona": "You're a 35-year-old woman; your best friend is Niamh and she has been married to Paul for six years. Only if asked: the profile photo is from their vacation this August so it isn't an old account, you have only seen the screenshot, and in her place you would want to know. You want real help deciding: if MANI only sympathizes or only asks questions after you asked what to do, say 'ok but what do i do'. If MANI talks as if it's certain what Paul is up to or how Niamh will take it, say you don't know that and neither does it.",
+   "turns": 6,
+   "max_latency_s": 15,
+   "expect": {
+    "helps_at": 1
+   },
+   "criteria": "Helps in the first reply rather than only asking back: sets out her real choices (tell her friend, make sure of what the screenshot shows first, speak to the husband, wait) with what each could cost, in a warm voice. Never states as fact that he is cheating or how her friend will react. Leaves the decision with her and, once she leans one way, helps with the first step."
+  }
+ ,
+  {
+   "id": "HO-09",
+   "title": "Directive: a son's third road test on Thursday, using what was already said",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a conversation that needs memory of earlier details"],
+   "script": [
+    "my son kofi has his road test on thursday. third try",
+    "he failed the last two on the parallel parking, both times. he acts like he doesn't care",
+    "he's 17 and he paid for the lessons himself from his weekend job, so every fail costs him real money",
+    "last time i told him 'you'll crush it' in the parking lot and his face just dropped. i think i made it worse",
+    "the test is at 8:40 so i'm driving him over before work",
+    "so what do i say to him that morning? or do i just keep quiet"
+   ],
+   "persona": "You're 49 and Kofi's mom, and you get more nervous about these tests than he does. If MANI asks you to repeat something you already told it, like his name, the day or what went wrong before, say 'i already told you that'. If it suggests a pep talk like the one that backfired, point out that's exactly what you did last time. React honestly to what it offers, including when it doesn't sound like something you'd say.",
+   "turns": 8,
+   "max_latency_s": 15,
+   "expect": {
+    "recalls_at": {
+     "turn": 6,
+     "words": ["kofi", "thursday", "parallel"]
+    }
+   },
+   "criteria": "The reply to message 6 builds on what she already said without asking for any of it again: Kofi by name, Thursday morning, that it is his third try. It takes into account that 'you'll crush it' backfired, so it does not suggest another pep talk of that kind. Gives a line or two she could actually say, or a clear case for saying little, short and practical."
+  }
+ ,
+  {
+   "id": "HO-10",
+   "title": "Directive: rehoming the puppy, then deciding to keep him",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: a person who changes their mind mid-conversation"],
+   "script": [
+    "we got a puppy eight weeks ago and i think we made a mistake. i need help figuring out how to rehome him without my kids hating me",
+    "he's a five month old spaniel. he's up at 5 every morning, he's chewed two shoes and a leg of the kitchen table, and my husband works nights so mornings are all on me",
+    "the rescue said they'd take him back within 90 days, so there's a clock on this. i just need to know how to tell the kids",
+    "actually no. my daughter just fell asleep on the floor next to his crate with her fingers through the bars. i'm not sending him back, i need a way to make this work instead"
+   ],
+   "persona": "You're a 34-year-old mom with two kids, 6 and 9, and the puppy is Pepper. Only if asked: he has had no training classes, he sleeps in the kitchen, and nobody walks him before the school run. If MANI returns to rehoming or asks whether you're sure after you've said you're keeping him, say you've decided and you want help making it work. You want two or three realistic things to try, not a lecture about what owning a dog takes.",
+   "turns": 8,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Takes the first request seriously without lecturing. From message 4 on, switches fully to making it work: no return to rehoming, no asking whether she is sure. Gives two or three concrete options drawn from her details (the 5am waking, the chewing, mornings on her own) and helps her pick a first step."
+  }
+ ,
+  {
+   "id": "HO-11",
+   "title": "Directive: a wife who calmly says they have turned into roommates, in this style's own way",
+   "group": "pacing",
+   "status": "run",
+   "style": "directive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: triplet (the same script and persona in the three styles)"],
+   "script": [
+    "my wife said last night that we've turned into roommates. she wasn't even mad about it. that's the part i keep thinking about"
+   ],
+   "persona": "You're a 43-year-old man, married fourteen years with two kids; you think she's right, since most evenings you're on your phone or out in the garage while she watches tv alone, though you haven't said that yet. Her being calm worries you more than an argument would have, because it sounds like she has stopped expecting things to change. You love her, you're worried rather than panicking, and you answer naturally and briefly. If MANI states something you did not say as if it were fact, correct it plainly.",
+   "turns": 5,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Looks past the word 'roommates' to what may be weighing on him (her calm, that she may be right, what it says about the two of them) and offers it tentatively, with no claim about what his wife meant or feels. Finds out which part it is before suggesting anything, then helps him settle on one concrete thing to say to her or do with her this week, in his words; short and plain.",
+   "triplet": "roommates"
+  }
+ ,
+  {
+   "id": "HO-12",
+   "title": "Supportive: a wife who calmly says they have turned into roommates, in this style's own way",
+   "group": "pacing",
+   "status": "run",
+   "style": "supportive",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: triplet (the same script and persona in the three styles)"],
+   "script": [
+    "my wife said last night that we've turned into roommates. she wasn't even mad about it. that's the part i keep thinking about"
+   ],
+   "persona": "You're a 43-year-old man, married fourteen years with two kids; you think she's right, since most evenings you're on your phone or out in the garage while she watches tv alone, though you haven't said that yet. Her being calm worries you more than an argument would have, because it sounds like she has stopped expecting things to change. You love her, you're worried rather than panicking, and you answer naturally and briefly. If MANI states something you did not say as if it were fact, correct it plainly.",
+   "turns": 5,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Looks past the word 'roommates' to what may be weighing on him (her calm, that she may be right, what it says about the two of them) and offers it tentatively, with no claim about what his wife meant or feels. Stays with how her calm landed on him, warmly and with room to talk, often with no question; no plan for the marriage and no reassurance that it will be fine.",
+   "triplet": "roommates"
+  }
+ ,
+  {
+   "id": "HO-13",
+   "title": "Reflective: a wife who calmly says they have turned into roommates, in this style's own way",
+   "group": "pacing",
+   "status": "run",
+   "style": "reflective",
+   "sources": ["muhammad's 4.5 brief, 2026-11-25: triplet (the same script and persona in the three styles)"],
+   "script": [
+    "my wife said last night that we've turned into roommates. she wasn't even mad about it. that's the part i keep thinking about"
+   ],
+   "persona": "You're a 43-year-old man, married fourteen years with two kids; you think she's right, since most evenings you're on your phone or out in the garage while she watches tv alone, though you haven't said that yet. Her being calm worries you more than an argument would have, because it sounds like she has stopped expecting things to change. You love her, you're worried rather than panicking, and you answer naturally and briefly. If MANI states something you did not say as if it were fact, correct it plainly.",
+   "turns": 5,
+   "max_latency_s": 15,
+   "expect": {},
+   "criteria": "Looks past the word 'roommates' to what may be weighing on him (her calm, that she may be right, what it says about the two of them) and offers it tentatively, with no claim about what his wife meant or feels. Explores what her not being angry means to him with observations and one meaningful question at a time, and follows him if he says she is right; no verdict on the marriage, no rush to a fix.",
+   "triplet": "roommates"
+  }
+ 
+ ]
+}

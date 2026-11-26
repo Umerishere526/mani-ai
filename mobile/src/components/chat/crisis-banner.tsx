@@ -1,5 +1,5 @@
-// ABOUTME: Replaces ChatInputBar when a crisis has been detected in the conversation —
-// ABOUTME: tapping it opens the crisis support drawer instead of letting the user keep typing.
+// ABOUTME: Replaces ChatInputBar while the person's chat is paused: tapping it reopens the crisis
+// ABOUTME: screen with the helplines instead of letting them keep typing.
 
 import { Pressable } from 'react-native';
 import { useSafeAreaInsets } from 'react-native-safe-area-context';

@@ -1,11 +1,11 @@
 // ABOUTME: Admin page for editing an existing prompt.
-// ABOUTME: Ported from mani-app's app/admin/prompts/[id]/page.tsx.
+// ABOUTME: Reads the prompt from the backend; saving publishes the next version.
 
 import Link from "next/link";
 import { notFound } from "next/navigation";
 import { BackLink, Badge, HistoryIcon } from "@/components/shared";
 import { PromptForm } from "@/components/admin";
-import { getPromptById } from "@/lib/placeholder-prompts";
+import { getPrompt } from "@/lib/api/prompts";
 import dictionary from "@/dictionaries/en.json";
 
 const STRINGS = dictionary.admin.pages.prompts;
@@ -17,7 +17,7 @@ interface EditPromptPageProps {
 
 export default async function EditPromptPage({ params }: EditPromptPageProps) {
   const { id } = await params;
-  const prompt = getPromptById(id);
+  const prompt = await getPrompt(id);
 
   if (!prompt) {
     notFound();
@@ -38,12 +38,7 @@ export default async function EditPromptPage({ params }: EditPromptPageProps) {
           <div>
             <h1 className="text-[1.75rem] font-semibold tracking-tight text-mani-text">{prompt.name}</h1>
             <p className="mt-1 text-sm text-mani-text-muted">
-              {STRINGS.editSubtitle
-                .replace("{version}", String(prompt.version))
-                .replace(
-                  "{date}",
-                  prompt.updatedAt ? new Date(prompt.updatedAt).toLocaleString() : COMMON.unknown,
-                )}
+              {STRINGS.editSubtitle.replace("{version}", String(prompt.version))}
             </p>
           </div>
           <Badge variant={prompt.isActive ? "success" : "neutral"}>

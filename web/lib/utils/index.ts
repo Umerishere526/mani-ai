@@ -3,3 +3,5 @@
 
 export { cn } from "./cn";
 export { formatRelativeTime } from "./format-relative-time";
+export { readAudioDurationMinutes } from "./read-audio-duration";
+export { formatDuration } from "./format-duration";

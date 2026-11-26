@@ -73,7 +73,7 @@ async def test_delete_user_sends_the_service_role_key_as_both_headers(monkeypatc
 
 
 async def test_a_failed_delete_raises_rather_than_leaving_the_account_in_place(monkeypatch):
-    """Unlike storage.signed_audio_url, this must never degrade silently - a failure here
+    """Unlike storage.signed_audio_urls, this must never degrade silently - a failure here
     means the account still exists."""
     install(monkeypatch, FakeClient(FakeResponse(404)))
 

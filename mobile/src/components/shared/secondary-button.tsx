@@ -11,6 +11,7 @@ import Animated, {
   interpolateColor,
   Easing,
 } from 'react-native-reanimated';
+import { MAX_FONT_SIZE_MULTIPLIER } from '@/lib/font-scaling';
 import { colors } from '@/lib/tokens';
 
 export interface SecondaryButtonProps extends PressableProps {
@@ -47,12 +48,24 @@ export function SecondaryButton({
   };
 
   return (
-    <Pressable className={className ?? 'self-center'} onPress={handlePress} disabled={disabled} {...props}>
+    <Pressable
+      className={className ?? 'self-center'}
+      onPress={handlePress}
+      disabled={disabled}
+      accessibilityRole="button"
+      accessibilityLabel={label}
+      accessibilityState={{ disabled: disabled ?? false }}
+      {...props}
+    >
       <Animated.View
         className="items-center justify-center rounded-full px-8 py-4"
         style={animatedButtonStyle}
       >
-        <Animated.Text allowFontScaling={false} className="font-sans-semibold text-base" style={animatedTextStyle}>
+        <Animated.Text
+          maxFontSizeMultiplier={MAX_FONT_SIZE_MULTIPLIER}
+          className="font-sans-semibold text-base"
+          style={animatedTextStyle}
+        >
           {label}
         </Animated.Text>
       </Animated.View>

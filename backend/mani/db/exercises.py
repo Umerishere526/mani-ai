@@ -1,9 +1,10 @@
-# ABOUTME: The exercise catalog and a user's completions.
-# ABOUTME: The catalog is shared config; completions are the user's own rows under RLS.
+# ABOUTME: The exercise catalog, its topics, and a user's completions.
+# ABOUTME: The catalog and topics are shared config; completions are the user's own rows under RLS.
 
 from __future__ import annotations
 
 import datetime as dt
+import re
 import uuid
 from typing import Any
 
@@ -12,10 +13,11 @@ from pydantic import BaseModel, ConfigDict
 
 from mani.models.rows import Exercise, Row
 
-COLUMNS = (
-    "id, title, subtitle, description, type, category, audio_path, "
-    "duration_minutes, display_order, show_on_home_screen, framework_id"
+_EXERCISE_COLUMNS = (
+    "id", "title", "subtitle", "description", "type", "category", "audio_path",
+    "duration_minutes", "display_order", "show_on_home_screen", "framework_id",
 )
+COLUMNS = ", ".join(_EXERCISE_COLUMNS)
 ADMIN_COLUMNS = COLUMNS + ", is_active, created_at, updated_at"
 
 
@@ -24,6 +26,21 @@ class Completion(Row):
     exercise_id: uuid.UUID
     helpful: bool | None = None
     completed_at: dt.datetime
+
+
+class ListedExercise(Exercise):
+    """An exercise in a topic's listing: `subcategory` is set when the topic lists it from another topic."""
+
+    subcategory: str | None = None
+
+
+class LibraryTopic(Row):
+    """A library topic: its id is the category its exercises carry."""
+
+    id: str
+    title: str
+    blurb: str = ""
+    display_order: int = 0
 
 
 class AdminExercise(Exercise):
@@ -57,22 +74,46 @@ async def list_active(
     category: str | None = None,
     *,
     home_screen: bool | None = None,
-) -> list[Exercise]:
+) -> list[ListedExercise]:
     """The catalog a signed-in user may browse, ordered as the portal arranged it.
 
-    `home_screen` None is the whole catalog; True or False narrows it to one side.
+    `category` narrows it to one topic: the exercises it owns, then those it lists from other topics, each under
+    its subcategory. `home_screen` None is the whole catalog; True or False narrows it to one side.
     """
+    columns = ", ".join(f"e.{name}" for name in _EXERCISE_COLUMNS)
     rows = await conn.fetch(
         f"""
-        select {COLUMNS} from admin.exercises
-         where is_active
-           and ($1::boolean is null or show_on_home_screen = $1)
-           and ($2::text is null or category = $2)
-         order by category, display_order, title
+        select {columns}, l.subcategory
+          from admin.exercises e
+          left join admin.exercise_topic_links l on l.exercise_id = e.id and l.topic_id = $2
+         where e.is_active
+           and ($1::boolean is null or e.show_on_home_screen = $1)
+           and ($2::text is null or e.category = $2 or l.topic_id is not null)
+         order by l.display_order nulls first, e.category, e.display_order, e.title
         """,
         home_screen, category,
     )
-    return Exercise.from_records(rows)
+    return ListedExercise.from_records(rows)
+
+
+async def list_topics(conn: asyncpg.Connection) -> list[LibraryTopic]:
+    """The client's topics; until they are seeded (scripts/seed_exercises.py needs the recordings), one topic per
+    category the active exercises already carry, titled from it, so the library is never empty (DEP-2, 2026-11-25)."""
+    rows = await conn.fetch(
+        "select id, title, blurb, display_order from admin.library_topics order by display_order, title"
+    )
+    if rows:
+        return LibraryTopic.from_records(rows)
+    categories = await conn.fetch(
+        "select distinct category from admin.exercises where is_active and category is not null order by category"
+    )
+    return [LibraryTopic(id=row["category"], title=_titled(row["category"]), display_order=place)
+            for place, row in enumerate(categories)]
+
+
+def _titled(category: str) -> str:
+    """A category id as a title: "WorkplaceChallenges" reads "Workplace Challenges"."""
+    return re.sub(r"(?<=[a-z])(?=[A-Z])", " ", category)
 
 
 async def get(conn: asyncpg.Connection, exercise_id: uuid.UUID | str) -> Exercise | None:

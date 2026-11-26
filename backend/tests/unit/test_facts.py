@@ -5,7 +5,7 @@ import datetime as dt
 import time
 import uuid
 
-from mani.chat.facts import facts, framework_guide, system_prompt
+from mani.chat.facts import facts, framework_guide, offerable, system_prompt
 from mani.chat.safety import State
 from mani.db.threads import TurnContext
 from mani.models.rows import Prompt, Thread
@@ -49,6 +49,7 @@ def test_no_offer_is_allowed_while_one_is_open_or_after_a_framework_was_finished
 def test_a_running_framework_names_the_next_stage_line_and_the_one_step_rule():
     text = facts_for(ctx(), style="directive", running=running("abcde", "activate"))
     assert '"B is for Belief."' in text and "Never move further than that." in text
+    assert "never push on through the steps left" in text and "set action to finish" in text
     assert "You cannot offer" in text
 
 
@@ -67,20 +68,50 @@ def test_the_notes_from_the_last_turn_are_handed_back():
     assert "Your notes from your last turn: boss, pushover" in facts_for(ctx(), record={"notes": "boss, pushover"})
 
 
-def test_the_open_chat_is_told_each_question_asked_and_what_it_was_for():
-    record = {"questions": [{"q": "What does a normal week look like?", "intent": "situation"},
-                            {"q": "", "intent": "none"},
-                            {"q": "What comes up when you picture saying no?", "intent": "feeling"}]}
+def test_the_people_and_events_kept_are_handed_back_with_their_relation_and_when():
+    record = {"people": [{"called": "Sam", "relation": "unsaid", "told": "stopped calling"}],
+              "events": [{"what": "Thanksgiving alone this Thursday", "when": "upcoming"}]}
     text = facts_for(ctx(), record=record)
-    assert ('[situation] "What does a normal week look like?"; [feeling] "What comes up when you picture saying no?"'
-            in text) and "ended on a question" not in text
-    assert "[situation]" not in facts_for(ctx(), record=record, running=running("abcde", "activate"))
+    assert "Sam (unsaid): stopped calling" in text and "[upcoming] Thanksgiving alone this Thursday" in text
+    assert "people they spoke of" not in facts_for(ctx()) and "[upcoming]" not in facts_for(ctx())
+
+
+def reply(q: str = "", intent: str = "none", *, open_chat: bool = True, move: str = "reflect", gist: str = "",
+          opens: str = "") -> dict:
+    return {"q": q, "intent": intent, "open_chat": open_chat, "move": move, "gist": gist, "opens": opens}
+
+
+def test_each_question_asked_is_told_with_what_it_was_for_in_the_chat_and_in_a_set():
+    record = {"replies": [reply("What does a normal week look like?", "situation"), reply(),
+                          reply("What happened?", "activate", open_chat=False)]}
+    listed = '[situation] "What does a normal week look like?"; [activate] "What happened?"'
+    assert listed in facts_for(ctx(), record=record)
+    assert listed in facts_for(ctx(), record=record, running=running("abcde", "belief"))
+
+
+def test_an_answered_question_is_told_as_already_answered():
+    record = {"replies": [{**reply("What did he say?", "situation"), "answer": "said I'm lazy"}]}
+    assert '[situation] "What did he say?" (already answered: "said I\'m lazy")' in facts_for(ctx(), record=record)
 
 
 def test_three_replies_in_a_row_that_asked_tell_the_next_to_give_something_instead():
-    asked = {"q": "Why?", "intent": "feeling"}
-    assert "Your last 3 replies each ended on a question" in facts_for(ctx(), record={"questions": [asked] * 3})
-    assert "ended on a question" not in facts_for(ctx(), record={"questions": [asked, {"q": "", "intent": "none"}, asked]})
+    asked = reply("Why?", "feeling")
+    assert "Your last 3 replies each ended on a question" in facts_for(ctx(), record={"replies": [asked] * 3})
+    assert "ended on a question" not in facts_for(ctx(), record={"replies": [asked, reply(), asked]})
+
+
+def test_a_set_s_questions_neither_count_toward_nor_are_told_the_open_chat_run():
+    in_set = reply("What happened?", "activate", open_chat=False)
+    assert "ended on a question" not in facts_for(ctx(), record={"replies": [in_set] * 3})
+    asked = {"replies": [reply("Why?", "feeling")] * 3}
+    assert "ended on a question" not in facts_for(ctx(), record=asked, running=running("abcde", "activate"))
+
+
+def test_only_the_recent_replies_tell_what_they_gave_and_how_they_opened():
+    kept = [reply(move="reassure", gist=f"gist {i}", opens=f"opener {i}") for i in range(10)]
+    text = facts_for(ctx(), record={"replies": kept})
+    assert "reassure: gist 4; reassure: gist 5" in text and "gist 3" not in text
+    assert 'opened with: "opener 6"; "opener 7"; "opener 8"; "opener 9"' in text and "opener 5" not in text
 
 
 def test_a_settled_answer_to_the_check_after_a_framework_leads_to_how_they_feel():
@@ -119,12 +150,13 @@ def test_the_open_offer_line_says_which_step_is_showing():
     assert "from the whole story to one moment" in steps
 
 
-def test_the_last_stage_asks_how_they_feel_and_the_check_in_offers_a_next_step():
+def test_the_last_stage_asks_how_they_feel_and_the_check_in_presumes_no_success():
     last = facts_for(ctx(), running=running("abcde", "effective"))
     assert "ask how they feel now" in last and "set action to finish" in last
     check_in = facts_for(ctx(), running=running("abcde", "feelings_check"))
-    assert "how they feel" in check_in and "practical next step" in check_in
-    assert "ask nothing" not in check_in and "is for" not in check_in
+    assert "never calling the set a success" in check_in and "force no question" in check_in
+    assert "what is still open" in check_in and "No praise" in check_in, "R172: the close names what is still open"
+    assert "if it didn't help" in check_in and "only if one would clearly help" in check_in and "is for" not in check_in
 
 
 def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():
@@ -137,3 +169,24 @@ def test_a_held_feelings_check_is_about_their_safety_and_promises_no_close():
 def test_no_offer_is_allowed_before_their_third_message():
     assert "You cannot offer" in facts_for(ctx(), person_messages=2)
     assert "You cannot offer" not in facts_for(ctx(), person_messages=3)
+
+
+ALL_SETS = ["abcde", "thought_reframe"]
+
+
+def offerable_for(**given) -> tuple[str, ...]:
+    base = dict(record={}, running=None, open_offer=None, holding=False, person_messages=5, state=State.CLEAR)
+    return offerable(CONFIG, **{**base, **given})
+
+
+def test_the_sets_a_reply_may_offer_are_the_active_ones_not_declined():
+    assert offerable_for() == ("abcde", "thought_reframe")
+    assert offerable_for(record={"declined": ["abcde"]}) == ("thought_reframe",)
+
+
+def test_nothing_may_be_offered_when_code_would_refuse_it_and_the_facts_say_so():
+    for refused in (dict(person_messages=2), dict(record={"finished": ["abcde"]}), dict(holding=True),
+                    dict(state=State.UNSURE), dict(open_offer=offered("abcde")),
+                    dict(record={"declined": ALL_SETS})):
+        assert offerable_for(**refused) == (), refused
+    assert "You cannot offer" in facts_for(ctx(), record={"declined": ALL_SETS})

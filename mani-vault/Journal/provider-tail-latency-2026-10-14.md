@@ -61,6 +61,8 @@ calls either, because `admin.llm_calls` had no provider. Every call now records 
 
 ## Next if slow turns persist
 
+> Superseded 2026-11-25 (hedged requests) — see REL-2
+
 Use streaming, not hedged requests. A stream carries the id and the provider on its first chunk, and it allows
 a first token deadline and one retry that `ignore`s the slow endpoint. A hedge doubles the cost of every turn
 past the hedge point, and while the tail was untraced it would have been a guess.

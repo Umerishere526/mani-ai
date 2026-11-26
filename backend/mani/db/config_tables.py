@@ -19,6 +19,16 @@ PROMPT_COLUMNS = (
     "id, name, description, content, version, model_id, "
     "model_parameters, routing, is_active"
 )
+# The prompt as it stands, kept in its history before anything replaces it. Copied inside the database, so the
+# seed's connection, which has no jsonb codec, writes the same row the portal's does.
+SNAPSHOT_PROMPT = """
+    insert into admin.prompt_versions
+        (prompt_id, version, content, model_id, model_parameters, routing, change_summary, created_by)
+    select id, version, content, model_id, model_parameters, routing, $2, $3
+      from admin.prompts
+     where id = $1
+    on conflict (prompt_id, version) do nothing
+"""
 FRAMEWORK_COLUMNS = (
     "id, name, summary, body, activation_conditions, phases, display_order, "
     "activation, stages"
@@ -102,17 +112,7 @@ async def update_prompt(
     if current is None:
         return None
 
-    await conn.execute(
-        """
-        insert into admin.prompt_versions
-            (prompt_id, version, content, model_id, model_parameters, routing,
-             change_summary, created_by)
-        values ($1, $2, $3, $4, $5::jsonb, $6::jsonb, $7, $8)
-        on conflict (prompt_id, version) do nothing
-        """,
-        current.id, current.version, current.content, current.model_id,
-        current.model_parameters, current.routing, change_summary, updated_by,
-    )
+    await conn.execute(SNAPSHOT_PROMPT, current.id, change_summary, updated_by)
 
     columns = [name for name in changes if name in EDITABLE_PROMPT_COLUMNS]
     if not columns:

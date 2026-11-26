@@ -57,7 +57,7 @@ async def delete_user(user_id: str) -> None:
     """Deletes the auth.users row. Every user table cascades from it, so this is the
     entire account teardown - there is nothing left for this backend to clean up.
 
-    Unlike storage.signed_audio_url, this must never degrade silently: a failure here
+    Unlike storage.signed_audio_urls, this must never degrade silently: a failure here
     means the account still exists, so it raises rather than swallowing the error.
     """
     try:

@@ -214,13 +214,41 @@ class ExerciseOut(BaseModel):
     description: str = ""
     type: str | None = None
     category: str
+    # Set when a topic lists this exercise from another topic: the subcategory it is shown under there.
+    subcategory: str | None = None
+    # Rounded to the nearest 30 seconds (0.5 minutes), the length the apps show.
     duration_minutes: float | None = None
     display_order: int = 0
     show_on_home_screen: bool = False
     framework_id: str | None = None
+    # False for an item the client has not recorded yet: shown as coming soon, with no audio_url.
+    recorded: bool
     audio_url: str | None = None
     # The caller's own rating of this exercise; null while they have not rated it.
     feedback: FeedbackOut | None = None
+
+
+class TopicOut(BaseModel):
+    """A library topic; its id is the `category` its exercises carry."""
+
+    id: str
+    title: str
+    blurb: str = ""
+    display_order: int = 0
+
+
+class UploadUrlIn(BaseModel):
+    model_config = ConfigDict(extra="forbid")
+
+    filename: str = Field(min_length=1, max_length=200)
+    content_type: Literal["audio/mpeg"]
+
+
+class UploadUrlOut(BaseModel):
+    """Where the browser PUTs the file (with Content-Type audio/mpeg), and the audio_path the exercise then holds."""
+
+    path: str
+    upload_url: str
 
 
 class CompletionIn(BaseModel):
@@ -264,6 +292,13 @@ class PromptIn(BaseModel):
 
 class TranscriptionOut(BaseModel):
     text: str
+
+
+class CatchUpOut(BaseModel):
+    """What one catch-up run did; a count is None for a job stopped at the run's budget."""
+
+    summaries: int | None
+    follow_ups: int | None
 
 
 class PromptVersionOut(BaseModel):

@@ -196,9 +196,14 @@ def generation_id_from(raw: Any) -> str | None:
 
 
 def usage_from(raw: Any) -> llm_calls.Usage:
-    """Token counts off the provider's response, whichever shape LangChain hands back."""
+    """Token counts and the billed cost off the provider's response, whichever shape LangChain hands back."""
     if raw is None:
         return llm_calls.Usage()
+
+    # OpenRouter's usage block arrives whole under `token_usage`, its `cost` included; LangChain copies only the
+    # token counts into `usage_metadata`, so the cost is read from the block either way.
+    token_usage = (getattr(raw, "response_metadata", None) or {}).get("token_usage") or {}
+    cost_usd = token_usage.get("cost")
 
     # OpenRouter reports the thinking as `completion_tokens_details.reasoning_tokens`, and
     # langchain-openai copies it into `usage_metadata.output_token_details.reasoning`.
@@ -211,9 +216,9 @@ def usage_from(raw: Any) -> llm_calls.Usage:
             output_tokens=metadata.get("output_tokens", 0) or 0,
             cached_input_tokens=details.get("cache_read", 0) or 0,
             reasoning_tokens=output_details.get("reasoning", 0) or 0,
+            cost_usd=cost_usd,
         )
 
-    token_usage = (getattr(raw, "response_metadata", None) or {}).get("token_usage") or {}
     prompt_details = token_usage.get("prompt_tokens_details") or {}
     completion_details = token_usage.get("completion_tokens_details") or {}
     return llm_calls.Usage(
@@ -221,4 +226,5 @@ def usage_from(raw: Any) -> llm_calls.Usage:
         output_tokens=token_usage.get("completion_tokens", 0) or 0,
         cached_input_tokens=prompt_details.get("cached_tokens", 0) or 0,
         reasoning_tokens=completion_details.get("reasoning_tokens", 0) or 0,
+        cost_usd=cost_usd,
     )

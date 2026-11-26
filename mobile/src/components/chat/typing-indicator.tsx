@@ -1,5 +1,5 @@
 // ABOUTME: Three-dot "Mani is typing" bubble shown while waiting for a chat response.
-// ABOUTME: Each dot pulses scale/opacity in a staggered loop via Reanimated.
+// ABOUTME: Each dot pulses in a staggered loop, or stays still when the system asks for reduced motion.
 
 import { useEffect } from 'react';
 import { View } from 'react-native';
@@ -12,6 +12,7 @@ import Animated, {
   withTiming,
   interpolate,
   Easing,
+  useReducedMotion,
 } from 'react-native-reanimated';
 import en from '@/dictionaries/en.json';
 
@@ -20,8 +21,13 @@ const STAGGER_DELAY = 200;
 
 function useDotStyle(delay: number) {
   const progress = useSharedValue(0);
+  const reduceMotion = useReducedMotion();
 
   useEffect(() => {
+    if (reduceMotion) {
+      progress.value = 1;
+      return;
+    }
     progress.value = withDelay(
       delay,
       withRepeat(
@@ -32,7 +38,7 @@ function useDotStyle(delay: number) {
         -1,
       ),
     );
-  }, [delay, progress]);
+  }, [delay, reduceMotion, progress]);
 
   return useAnimatedStyle(() => ({
     transform: [{ scale: interpolate(progress.value, [0, 1], [0.6, 1]) }],

@@ -1,22 +1,10 @@
-// ABOUTME: Static safety-support copy shown inside CrisisDrawer — intro, situational
-// ABOUTME: guidance, action links, and disclaimer. Extracted so the drawer shell stays small.
+// ABOUTME: Safety-support copy shown inside CrisisDrawer: intro, situational guidance, the tappable
+// ABOUTME: crisis lines, and disclaimer. Extracted so the drawer shell stays small.
 
-import { Pressable, View } from 'react-native';
+import { View } from 'react-native';
 import en from '@/dictionaries/en.json';
 import { Text } from '@/components/shared';
-
-interface ActionLinkProps {
-  label: string;
-  onPress?: () => void;
-}
-
-function ActionLink({ label, onPress }: ActionLinkProps) {
-  return (
-    <Pressable className="py-2 active:opacity-70" onPress={onPress}>
-      <Text className="font-sans-medium text-base text-secondary-500 underline">{label}</Text>
-    </Pressable>
-  );
-}
+import { CrisisHelpLines } from './crisis-help-lines';
 
 export function CrisisGuidance() {
   return (
@@ -40,10 +28,8 @@ export function CrisisGuidance() {
         ))}
       </View>
 
-      <View className="mb-10 gap-4">
-        {en.crisis.actions.map((label) => (
-          <ActionLink key={label} label={label} />
-        ))}
+      <View className="mb-10">
+        <CrisisHelpLines />
       </View>
 
       <Text className="text-sm leading-[22px] text-secondary-500">{en.crisis.disclaimer}</Text>

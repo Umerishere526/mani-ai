@@ -1,18 +1,20 @@
-# ABOUTME: The OpenRouter call - one attempt, a real timeout, and a logged cost row.
+# ABOUTME: The OpenRouter call - at most two requests, a real timeout, and a logged cost row each.
 # ABOUTME: Structured output is parsed into a Pydantic model; anything else is an error.
 
 from __future__ import annotations
 
 import asyncio
+import functools
 import logging
 import time
 import uuid
 from collections.abc import AsyncIterator
 from contextlib import asynccontextmanager
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
 import openai
+from langchain_core.callbacks import AsyncCallbackHandler
 from langchain_core.exceptions import OutputParserException
 from langchain_openai import StreamChunkTimeoutError
 from pydantic import BaseModel, ValidationError
@@ -27,8 +29,8 @@ logger = logging.getLogger(__name__)
 DEFAULT_TEMPERATURE = 0.7
 DEFAULT_MAX_TOKENS = 2048
 
-# One retry, shared by a malformed reply, a provider that is briefly down and a call that sent
-# nothing for too long. Without it any of them loses the person's typed message entirely -
+# One retry, shared by a malformed reply, a provider that is briefly down, a call that sent
+# nothing for too long and a chat call raced on a second host. Without it any of them loses the person's typed message entirely -
 # complete() is called before the turn writes anything, so a raise here leaves nothing in the
 # thread to show for the turn.
 MAX_SCHEMA_ATTEMPTS = 2
@@ -43,6 +45,10 @@ class Call[T: BaseModel]:
     usage: llm_calls.Usage
     latency_ms: int
     call_id: uuid.UUID | None
+    # From the answering attempt's start to its first streamed chunk; None when none arrived.
+    first_token_ms: int | None = None
+    # The sentences the reply check rewrote or took out (mani/chat/check.py), for the turn's trace.
+    checked: tuple[str, ...] = ()
 
 
 # A provider that is briefly down or unreachable. APITimeoutError is a subclass of
@@ -79,8 +85,37 @@ def _described(failure: BaseException | None) -> str:
     if isinstance(failure, _QUOTES_THE_REPLY):
         return type(failure).__name__
     if isinstance(failure, _QUOTES_THEIR_WORDS):
-        return f"{type(failure).__name__}: {failure.status_code}"
+        host, own = _host_of(failure), _openrouters_own(failure)
+        return (f"{type(failure).__name__}: {failure.status_code}" + (f" from {host}" if host else "")
+                + (f" ({own})" if own else ""))
     return f"{type(failure).__name__}: {failure}"
+
+
+def _openrouters_own(failure: openai.APIStatusError) -> str | None:
+    """OpenRouter's own message for an error no provider raised: one with no metadata, which is where a provider's raw
+    body (and anything it quotes of what they wrote) is carried. None otherwise."""
+    error = failure.body.get("error") if isinstance(failure.body, dict) else None
+    if not isinstance(error, dict) or "metadata" in error:
+        return None
+    message = error.get("message")
+    return message if isinstance(message, str) and message else None
+
+
+# OpenRouter refusing to pass a request on, with no provider involved: seen on 2026-11-25 as 23 of 25 calls in one
+# minute failing, every call before and after answering. Nothing was billed, so one retry costs nothing.
+RELAY_REFUSALS = ("Request path cannot be relayed",)
+
+
+def _relay_refused(failure: openai.BadRequestError) -> bool:
+    return _openrouters_own(failure) in RELAY_REFUSALS
+
+
+def _host_of(failure: openai.APIStatusError) -> str | None:
+    """The host OpenRouter names in an error's metadata, which quotes nothing anyone wrote; None when it names none."""
+    error = failure.body.get("error") if isinstance(failure.body, dict) else None
+    metadata = error.get("metadata") if isinstance(error, dict) else None
+    host = metadata.get("provider_name") if isinstance(metadata, dict) else None
+    return host if isinstance(host, str) and host else None
 
 
 # The model calls this instance has in flight, made on first use in the running loop.
@@ -116,7 +151,7 @@ def _generation_id_of(exc: BaseException) -> str | None:
 
 
 def _usage_of(exc: BaseException) -> llm_calls.Usage:
-    """The tokens a failed attempt was billed for, when the SDK kept the completion."""
+    """The tokens a failed attempt was billed for, and what it cost, when the SDK kept the completion."""
     usage = getattr(getattr(exc, "completion", None), "usage", None)
     if usage is None:
         return llm_calls.Usage()
@@ -127,7 +162,21 @@ def _usage_of(exc: BaseException) -> llm_calls.Usage:
         reasoning_tokens=(
             getattr(usage.completion_tokens_details, "reasoning_tokens", None) or 0
         ),
+        # OpenRouter's own field; the SDK keeps fields it does not declare as attributes.
+        cost_usd=getattr(usage, "cost", None),
     )
+
+
+class _FirstChunk(AsyncCallbackHandler):
+    """Notes when an attempt's first streamed chunk arrives. The structured stream hands back the reply whole at the
+    end, so the model's own per-chunk callback is the only place the first one shows."""
+
+    def __init__(self) -> None:
+        self.at: float | None = None
+
+    async def on_llm_new_token(self, token: str, **kwargs: Any) -> None:
+        if self.at is None:
+            self.at = time.perf_counter()
 
 
 async def _folded(stream) -> dict:
@@ -256,8 +305,11 @@ async def complete[T: BaseModel](
 
     OpenRouter is the only provider. LangChain composes the call and parses the reply into
     the schema; the base_url points at OpenRouter, so it is one protocol and one bill, not a
-    second provider. One provider call, plus at most one retry when the reply does not
-    parse - each attempt billed and recorded on its own row.
+    second provider. One provider request, plus at most one more: after a reply that does not
+    parse, a silence, a provider blip or a relay refusal, or beside the first when a chat call
+    has sent nothing for `chat_hedge_seconds` and another host is allowed. A chat call's second
+    request goes to the other hosts, and the first to answer is the reply. Each request is
+    billed and recorded on its own row, a cancelled one included.
     """
     from mani.db import pool
 
@@ -271,142 +323,210 @@ async def complete[T: BaseModel](
         )
 
     chat = purpose is llm_calls.Purpose.CHAT
-    runnable = chain.build(
-        schema,
-        model=model,
-        temperature=temperature,
-        max_tokens=max_tokens,
-        reasoning_effort=reasoning_effort,
-        routing=routing,
-        settings=settings,
-        chunk_timeout=settings.chat_first_token_seconds if chat else settings.llm_timeout_seconds,
-        # Only the reply the person waits on pays for the faster tier.
-        priority=chat and settings.openrouter_chat_service_tier == "priority",
-        # One key per thread and purpose: chat may use the priority endpoint and the other calls may not,
-        # so a key they shared would pin the conversation to a different endpoint after every call, and
-        # their prompts never share a cached prefix anyway (each starts from its own reply schema).
-        session=f"{thread_id}:{purpose.value}" if thread_id else None,
+    second_routing = _other_hosts(routing, settings) if chat else None
+
+    def build(routing: dict[str, Any] | None, session: str | None):
+        return chain.build(
+            schema,
+            model=model,
+            temperature=temperature,
+            max_tokens=max_tokens,
+            reasoning_effort=reasoning_effort,
+            routing=routing,
+            settings=settings,
+            chunk_timeout=settings.chat_first_token_seconds if chat else settings.llm_timeout_seconds,
+            # Only the reply the person waits on pays for the faster tier.
+            priority=chat and settings.openrouter_chat_service_tier == "priority",
+            session=session,
+        )
+
+    # One key per thread and purpose: chat may use the priority endpoint and the other calls may not,
+    # so a key they shared would pin the conversation to a different endpoint after every call, and
+    # their prompts never share a cached prefix anyway (each starts from its own reply schema).
+    runnable = build(routing, f"{thread_id}:{purpose.value}" if thread_id else None)
+    row = functools.partial(
+        _record, purpose=purpose, model=model, user_id=user_id, thread_id=thread_id,
+        prompt_version_id=prompt_version_id,
     )
 
     async with _model_slot(settings):
         messages = _apply_model_quirks(messages, model)
-
-        usage = llm_calls.Usage()
-        generation_id: str | None = None
         began = time.perf_counter()
+        running: dict[asyncio.Task[_Attempt], _Attempt] = {}
+
+        def start(number: int) -> None:
+            # The second request of a chat call goes to the other hosts, with no sticky keys, so a host that won
+            # one race never pins the conversation away from the first host's warm cache.
+            attempt = _Attempt(number, runnable if number == 1 or second_routing is None
+                               else build(second_routing, None))
+            # A chat reply has a deadline for the whole call; the per read timeout alone let one run for 102 s. The
+            # background calls (summaries) keep only that. A second request gets the deadline or what is left of
+            # the budget, whichever is shorter.
+            deadline = (min(settings.chat_deadline_seconds, settings.chat_budget_seconds - (time.perf_counter() - began))
+                        if chat else None)
+            running[asyncio.create_task(_run(attempt, messages, deadline))] = attempt
+
+        start(1)
+        started = 1
+        hedge_at = began + settings.chat_hedge_seconds if second_routing is not None else None
+        last: _Attempt | None = None
         try:
-            parsed = None
-            for attempt in range(1, MAX_SCHEMA_ATTEMPTS + 1):
-                # Reset per attempt, so an attempt that raises is never recorded with the tokens
-                # of the one before it, and each row's latency is that attempt's own time, not
-                # the attempts and the retry pause before it.
-                usage = llm_calls.Usage()
-                generation_id = None
-                started = time.perf_counter()
-                try:
-                    # A chat reply has a deadline for the whole call; the per read timeout alone let one
-                    # run for 102 s. The background calls (summaries) keep only that.
-                    # A retry gets the deadline or what is left of the budget, whichever is shorter.
-                    if chat:
-                        left = settings.chat_budget_seconds - (time.perf_counter() - began)
-                        result = await asyncio.wait_for(
-                            _folded(runnable.astream(messages)), min(settings.chat_deadline_seconds, left)
+            while running:
+                wait = max(0.0, hedge_at - time.perf_counter()) if hedge_at is not None and started == 1 else None
+                done, _ = await asyncio.wait(running, timeout=wait, return_when=asyncio.FIRST_COMPLETED)
+                if not done:
+                    # Nothing yet from the first host: a slow provider, seen at 20 to 27 s (2026-11-25). The other
+                    # host starts beside it, and whichever answers first is the reply.
+                    hedge_at = None
+                    if running[next(iter(running))].first_chunk.at is None:
+                        start(2)
+                        started = 2
+                    continue
+                # A failure finished in the same moment as an answer is recorded before the answer returns.
+                for task in sorted(done, key=lambda t: running[t].answered):
+                    attempt = running.pop(task)
+                    if attempt.answered:
+                        await _settle_losers(running, attempt, row)
+                        call_id = await row(
+                            outcome=llm_calls.Outcome.OK, usage=attempt.usage, latency_ms=attempt.latency_ms(),
+                            error_message=None, generation_id=attempt.generation_id,
                         )
-                    else:
-                        result = await _folded(runnable.astream(messages))
-                except StreamChunkTimeoutError as exc:
-                    if attempt == MAX_SCHEMA_ATTEMPTS:
-                        raise
-                    # Nothing came for the whole wait: a reasoning model thinking far longer than its
-                    # neighbours. The cut attempt gets its own row, and one more try usually answers
-                    # sooner than waiting out the first (2026-10-21).
-                    await _record(
-                        purpose=purpose, model=model, outcome=llm_calls.Outcome.TIMEOUT,
-                        usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
-                        user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
-                        error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
-                    )
-                    continue
-                except _TRANSIENT as exc:
-                    if isinstance(exc, openai.APITimeoutError) or attempt == MAX_SCHEMA_ATTEMPTS:
-                        raise
-                    # The provider was briefly unavailable - seen live, 1 call in 265, from one
-                    # upstream. It billed nothing, so one retry costs nothing and
-                    # keeps a blip from reaching the person as an error. Recorded as its own row.
-                    await _record(
-                        purpose=purpose, model=model, outcome=llm_calls.Outcome.PROVIDER_ERROR,
-                        usage=llm_calls.Usage(), latency_ms=int((time.perf_counter() - started) * 1000),
-                        user_id=user_id, thread_id=thread_id, prompt_version_id=prompt_version_id,
-                        error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}, retrying: {exc}",
-                    )
-                    await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
-                    continue
-                except _SCHEMA_FAILURES as exc:
-                    # With a response_format, LangChain calls the SDK's parse(), which validates
-                    # inside the model step: a reply cut off at max_tokens, stopped by a content
-                    # filter or not matching the schema raises here and never reaches
-                    # parsing_error. It is the same failure, so it gets the same one retry.
-                    result = {"raw": None, "parsed": None, "parsing_error": exc}
-                    usage = _usage_of(exc)
-                    generation_id = _generation_id_of(exc)
-                except ValueError as exc:
-                    if NO_CONTENT not in str(exc):
-                        raise
-                    # An empty reply is a reply that does not parse: the same one retry. LangChain keeps no
-                    # completion on this error, so the attempt's tokens and id are not known.
-                    result = {"raw": None, "parsed": None, "parsing_error": exc}
-                    usage = chain.usage_from(None)
-                    generation_id = None
-                else:
-                    usage = chain.usage_from(result.get("raw"))
-                    generation_id = chain.generation_id_from(result.get("raw"))
-                parsed = result.get("parsed")
-                failure = result.get("parsing_error")
-                if failure is None and parsed is not None:
-                    break
+                        return Call(
+                            value=attempt.parsed, model=model, usage=attempt.usage, latency_ms=attempt.latency_ms(),
+                            call_id=call_id, first_token_ms=attempt.first_token_ms(),
+                        )
+                    retrying = started == 1 and attempt.worth_retrying()
+                    await _record_failed(row, attempt, retrying=retrying)
+                    last = attempt
+                    if retrying:
+                        if attempt.pause_before_retry():
+                            await asyncio.sleep(TRANSIENT_RETRY_DELAY_SECONDS)
+                        start(2)
+                        started = 2
+        finally:
+            for task in running:
+                task.cancel()
 
-                # A schema failure still cost a real provider call, so it gets its own row
-                # rather than being silently absorbed into whichever attempt finally works -
-                # both a retried success and an exhausted retry are fully accounted for.
-                latency_ms = int((time.perf_counter() - started) * 1000)
-                await _record(
-                    purpose=purpose, model=model, outcome=llm_calls.Outcome.SCHEMA_INVALID,
-                    usage=usage, latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-                    prompt_version_id=prompt_version_id,
-                    error_message=f"attempt {attempt}/{MAX_SCHEMA_ATTEMPTS}: {_described(failure)}",
-                    generation_id=generation_id,
-                )
-                if attempt == MAX_SCHEMA_ATTEMPTS:
-                    raise ServiceError(
-                        f"model returned no parseable reply after {MAX_SCHEMA_ATTEMPTS} "
-                        f"attempts: {_described(failure)}",
-                        ErrorCategory.LLM_UNAVAILABLE,
-                        retryable=True,
-                        user_message="Mani had trouble responding. Please try again.",
-                    )
-        except ServiceError:
-            # Already recorded above, per attempt - re-raising bare avoids a second row for
-            # the same failure and keeps this from falling through to the generic handler
-            # below, which would call _as_service_error() on an error that already is one.
-            raise
-        except Exception as exc:
-            latency_ms = int((time.perf_counter() - started) * 1000)
-            error, outcome = _as_service_error(exc)
-            await _record(
-                purpose=purpose, model=model, outcome=outcome, usage=usage,
-                latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-                prompt_version_id=prompt_version_id, error_message=_described(exc),
-                generation_id=generation_id,
-            )
-            # The cause rides along on the log and the error report, so one that quotes the reply or them is dropped.
-            raise error from (None if isinstance(exc, _QUOTES_THE_REPLY + _QUOTES_THEIR_WORDS) else exc)
+        assert last is not None
+        error = _final_error(last, started)
+        # The cause rides along on the log and the error report, so one that quotes the reply or them is dropped.
+        quoting = last.unparsed or isinstance(last.failure, _QUOTES_THE_REPLY + _QUOTES_THEIR_WORDS)
+        raise error from (None if quoting else last.failure)
 
-        latency_ms = int((time.perf_counter() - started) * 1000)
-        call_id = await _record(
-            purpose=purpose, model=model, outcome=llm_calls.Outcome.OK, usage=usage,
-            latency_ms=latency_ms, user_id=user_id, thread_id=thread_id,
-            prompt_version_id=prompt_version_id, error_message=None, generation_id=generation_id,
+
+def _other_hosts(routing: dict[str, Any] | None, settings: Settings) -> dict[str, Any] | None:
+    """Where a chat call's second request goes: the hosts after the first in `only`. None when only one is allowed,
+    and the second request then goes where the first did."""
+    hosts = (routing or {}).get("only", settings.openrouter_providers)
+    return {**(routing or {}), "only": hosts[1:]} if len(hosts) > 1 else None
+
+
+@dataclass
+class _Attempt:
+    """One request of a call: what it was sent to, when it started, and how it ended."""
+
+    number: int
+    runnable: Any
+    started: float = field(default_factory=time.perf_counter)
+    ended: float | None = None
+    first_chunk: _FirstChunk = field(default_factory=_FirstChunk)
+    parsed: BaseModel | None = None
+    # What it raised, or the reply's own parsing error. None with no parsed reply is an empty one.
+    failure: BaseException | None = None
+    # A reply came back and did not parse: malformed, cut off, filtered or empty.
+    unparsed: bool = False
+    usage: llm_calls.Usage = field(default_factory=llm_calls.Usage)
+    generation_id: str | None = None
+
+    @property
+    def answered(self) -> bool:
+        return self.parsed is not None and self.failure is None
+
+    def latency_ms(self) -> int:
+        return int(((self.ended or time.perf_counter()) - self.started) * 1000)
+
+    def first_token_ms(self) -> int | None:
+        """From the attempt's start to its first streamed chunk; None when none arrived."""
+        return int((self.first_chunk.at - self.started) * 1000) if self.first_chunk.at is not None else None
+
+    def worth_retrying(self) -> bool:
+        """A reply that did not parse, a call that sent nothing for too long, a provider briefly down and OpenRouter
+        refusing to relay get one more request. A full read timeout already cost the whole wait, and anything else
+        would fail again."""
+        failure = self.failure
+        if self.unparsed or isinstance(failure, StreamChunkTimeoutError):
+            return True
+        if isinstance(failure, _TRANSIENT):
+            return not isinstance(failure, openai.APITimeoutError)
+        return isinstance(failure, openai.BadRequestError) and _relay_refused(failure)
+
+    def pause_before_retry(self) -> bool:
+        """A provider blip and a relay refusal billed nothing, and a moment's pause lets them clear."""
+        return isinstance(self.failure, (*_TRANSIENT, openai.BadRequestError))
+
+
+async def _run(attempt: _Attempt, messages: list[dict[str, str]], deadline: float | None) -> _Attempt:
+    """One request, streamed and folded into one reply; every way it can end is kept on the attempt, never raised."""
+    stream = _folded(attempt.runnable.astream(messages, {"callbacks": [attempt.first_chunk]}))
+    try:
+        result = await (stream if deadline is None else asyncio.wait_for(stream, deadline))
+    except _SCHEMA_FAILURES as exc:
+        # With a response_format, LangChain calls the SDK's parse(), which validates inside the model step: a reply
+        # cut off at max_tokens, stopped by a content filter or not matching the schema raises here and never
+        # reaches parsing_error. It is the same failure, so it gets the same one retry.
+        attempt.failure, attempt.unparsed = exc, True
+        attempt.usage, attempt.generation_id = _usage_of(exc), _generation_id_of(exc)
+    except ValueError as exc:
+        # An empty reply is a reply that does not parse. LangChain keeps no completion on this error, so the
+        # attempt's tokens and id are not known.
+        attempt.failure, attempt.unparsed = exc, NO_CONTENT in str(exc)
+    except Exception as exc:
+        attempt.failure = exc
+    else:
+        attempt.usage = chain.usage_from(result.get("raw"))
+        attempt.generation_id = chain.generation_id_from(result.get("raw"))
+        attempt.parsed, attempt.failure = result.get("parsed"), result.get("parsing_error")
+        attempt.unparsed = not attempt.answered
+    attempt.ended = time.perf_counter()
+    return attempt
+
+
+async def _record_failed(row, attempt: _Attempt, *, retrying: bool) -> None:
+    """A failed request's own row: a schema failure still cost a real provider call, so it is never absorbed into
+    whichever request answers, and its latency is its own, not the requests and the pause before it."""
+    outcome = llm_calls.Outcome.SCHEMA_INVALID if attempt.unparsed else _as_service_error(attempt.failure)[1]
+    await row(
+        outcome=outcome, usage=attempt.usage, latency_ms=attempt.latency_ms(), generation_id=attempt.generation_id,
+        error_message=(f"attempt {attempt.number}/{MAX_SCHEMA_ATTEMPTS}{', retrying' if retrying else ''}: "
+                       f"{_described(attempt.failure)}"),
+    )
+
+
+async def _settle_losers(running: dict[asyncio.Task[_Attempt], _Attempt], winner: _Attempt, row) -> None:
+    """Stops the requests still running once one has answered, and records each: a cancelled one as a timeout of
+    its own (it was slower, and it is probably billed), one that finished meanwhile as what it was."""
+    for task, attempt in list(running.items()):
+        task.cancel()
+        await asyncio.gather(task, return_exceptions=True)
+        del running[task]
+        note = f"attempt {attempt.number}/{MAX_SCHEMA_ATTEMPTS}: not used, attempt {winner.number} answered first"
+        if task.cancelled():
+            await row(outcome=llm_calls.Outcome.TIMEOUT, usage=llm_calls.Usage(), latency_ms=attempt.latency_ms(),
+                      error_message=f"{note} and this one was cancelled", generation_id=None)
+        else:
+            outcome = (llm_calls.Outcome.OK if attempt.answered else llm_calls.Outcome.SCHEMA_INVALID
+                       if attempt.unparsed else _as_service_error(attempt.failure)[1])
+            await row(outcome=outcome, usage=attempt.usage, latency_ms=attempt.latency_ms(),
+                      error_message=note, generation_id=attempt.generation_id)
+
+
+def _final_error(last: _Attempt, attempts: int) -> ServiceError:
+    """What the caller is told when no request answered: the last one to fail decides."""
+    if last.unparsed:
+        return ServiceError(
+            f"model returned no parseable reply after {attempts} attempts: {_described(last.failure)}",
+            ErrorCategory.LLM_UNAVAILABLE,
+            retryable=True,
+            user_message="Mani had trouble responding. Please try again.",
         )
-        return Call(
-            value=parsed, model=model, usage=usage, latency_ms=latency_ms, call_id=call_id
-        )
+    return _as_service_error(last.failure)[0]

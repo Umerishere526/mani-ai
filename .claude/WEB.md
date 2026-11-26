@@ -48,6 +48,13 @@ Tailwind here is **CSS-first**. There is no `tailwind.config.js` and you should 
 - Server Components are the default in the App Router. Add `"use client"` only when a component actually needs state, effects, or browser APIs.
 - `next.config.ts` holds the one redirect from `/` to `/auth/login`; further config goes in the `nextConfig` object.
 
-## Backend calls
+## Backend calls and auth
 
-The FastAPI backend is a separate process (see [BACKEND.md](BACKEND.md)) at `http://127.0.0.1:8000` in development. There is no proxy configured in `next.config.ts`, so either add a rewrite or use the absolute URL from an env var. Never hardcode the host in a component.
+The FastAPI backend is a separate process (see [BACKEND.md](BACKEND.md)) at `http://127.0.0.1:8000` in development. The web admin calls it only from the server: `lib/api/admin-fetch.ts` sends the signed-in admin's bearer token to `/v1/admin/*`, and every call checks the admin session first. Never hardcode the host in a component, and never call the backend or Supabase from the browser.
+
+Server-only environment variables (no `NEXT_PUBLIC_` prefix, so they never reach the browser bundle), in `web/.env.local` for development:
+
+- `MANI_API_URL` — the FastAPI backend's base URL (`lib/api/admin-fetch.ts`).
+- `SUPABASE_URL` and `SUPABASE_ANON_KEY` — the project's Auth, for the password sign-in and token refresh (`lib/auth/gotrue.ts`).
+
+Auth: sign-in posts to a server action that exchanges email and password with Supabase Auth over fetch and keeps the tokens in httpOnly cookies (`lib/auth/session-cookies.ts`). `proxy.ts` (Next.js 16's middleware, matcher `/admin/:path*`) is the optimistic check: it sends a visitor with no session to sign-in and refreshes an expiring access token. `lib/auth/require-admin.ts` is the real check, on every read: it verifies the token with the auth server and requires `app_metadata.admin_role` to be `"admin"`, the claim the backend checks.

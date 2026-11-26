@@ -4,6 +4,45 @@
     "error": "Something went wrong",
     "retry": "Try again"
   },
+  "auth": {
+    "signInTitle": "Sign In",
+    "signInIntro": "Welcome back. Sign in with your email and password.",
+    "signIn": "Sign In",
+    "signingIn": "Signing in...",
+    "toSignUp": "New here? Create an account",
+    "signUpTitle": "Create Account",
+    "signUpIntro": "Create an account with your email and a password of at least 8 characters.",
+    "signUp": "Create Account",
+    "signingUp": "Creating account...",
+    "toSignIn": "Already have an account? Sign in",
+    "confirmEmailTitle": "Check Your Email",
+    "confirmEmailIntro": "We sent a confirmation link to the address below. Open it, then come back and sign in.",
+    "emailLabel": "Email",
+    "emailPlaceholder": "you@example.com",
+    "passwordLabel": "Password",
+    "passwordPlaceholder": "Enter your password",
+    "passwordHintSignIn": "Enter your password",
+    "passwordHintSignUp": "Choose a password of at least 8 characters"
+  },
+  "onboarding": {
+    "title": "Welcome to MANI",
+    "intro": "A couple of quick choices so Mani can talk with you the way you like. You can change them later.",
+    "nicknameLabel": "What should Mani call you? (optional)",
+    "nicknamePlaceholder": "Your name or a nickname",
+    "nicknameHint": "Mani uses this name when talking with you",
+    "stylePrompt": "How would you like Mani to speak with you?",
+    "saving": "Saving...",
+    "profileLoadFailed": "We couldn't load your profile. Check your connection and try again."
+  },
+  "errors": {
+    "invalidCredentials": "That email and password don't match an account.",
+    "emailNotConfirmed": "Please confirm your email first, using the link we sent you.",
+    "userAlreadyExists": "An account with this email already exists. Try signing in.",
+    "weakPassword": "Please choose a stronger password.",
+    "rateLimited": "Too many attempts. Please wait a moment and try again.",
+    "network": "Can't reach MANI right now. Check your connection and try again.",
+    "timeout": "This is taking longer than it should. Please try again."
+  },
   "home": {
     "greeting": "Support starts here",
     "loadingExercisesLabel": "Loading exercises",
@@ -18,6 +57,7 @@
     "notifications": "Notifications",
     "changePassword": "Change Password",
     "changeEmail": "Change Email",
+    "deleteAccount": "Delete Account",
     "logOut": "Log Out",
     "loggingOut": "Logging out...",
     "goBackLabel": "Go back"
@@ -79,12 +119,21 @@
     "successMessage": "Your password has been updated.",
     "ok": "OK"
   },
+  "deleteAccount": {
+    "title": "Delete Account",
+    "explanation": "Deleting your account permanently removes your conversations, your profile and your exercise history. MANI can't recover any of it afterwards.",
+    "continue": "Continue",
+    "confirmWarning": "Are you sure? This can't be undone.",
+    "confirm": "Delete My Account",
+    "confirmHint": "Permanently deletes your account and everything in it",
+    "deleting": "Deleting...",
+    "cancel": "Keep My Account"
+  },
   "exercises": {
     "comingSoon": "150+ topics coming soon",
     "failedToLoad": "Failed to load exercises",
     "empty": "No exercises available yet",
     "loadingExerciseLabel": "Loading exercise",
-    "failedToLoadExercise": "Failed to load exercise",
     "failedToLoadAudio": "Failed to load audio. Please try again.",
     "playbackFailed": "Playback failed. Please try again.",
     "begin": "Begin",
@@ -94,33 +143,12 @@
     "beginHint": "Starts playing the exercise audio",
     "pauseLabel": "Pause exercise",
     "playLabel": "Play exercise",
-    "elapsedTimeLabel": "Elapsed time",
-    "categories": {
-      "EmotionalIntelligence": {
-        "title": "Emotional Intelligence",
-        "description": "Develop awareness and understanding of your emotions"
-      },
-      "NarcissisticDynamics": {
-        "title": "Narcissistic Dynamics",
-        "description": "Navigate challenging relationship patterns"
-      },
-      "BuildingHabits": {
-        "title": "Building New Habits",
-        "description": "Create lasting positive changes in your life"
-      },
-      "Boundaries": {
-        "title": "Boundaries",
-        "description": "Learn to set and maintain healthy boundaries"
-      },
-      "Anxiety": {
-        "title": "Anxiety",
-        "description": "Tools and techniques to manage anxious feelings"
-      },
-      "Burnout": {
-        "title": "Burnout",
-        "description": "Recover and prevent emotional exhaustion"
-      }
-    }
+    "remainingTimeLabel": "Time remaining",
+    "completeTitle": "Exercise complete",
+    "continueChatting": "Continue chatting",
+    "visitLibrary": "Visit library",
+    "comingSoonItem": "Coming soon",
+    "loadingLabel": "Loading the library"
   },
   "shared": {
     "gradientSphereLabel": "Mani sphere",
@@ -143,30 +171,29 @@
     "startNewConversation": "Start New Conversation",
     "openSettingsLabel": "Open settings",
     "goBackLabel": "Go back",
+    "userMessageLabel": "You: {message}",
+    "maniMessageLabel": "Mani: {message}",
+    "threadLabel": "Conversation: {title}",
+    "profileFallbackName": "User",
     "newConversationFallbackTitle": "New conversation",
     "dateGroups": {
       "today": "Today",
       "yesterday": "Yesterday",
       "older": "Older"
     },
-    "styleGreeting": "Hi, it's Mani",
-    "stylePrompt": "How would you like me to speak with you today?",
     "styleOptionsLabel": "Conversation style options",
     "styles": {
       "directive": {
         "label": "Directive",
-        "description": "Mani leads you toward clarity, action, and next steps",
-        "opening": "How can I help you today?"
+        "description": "Mani leads you toward clarity, action, and next steps"
       },
       "supportive": {
         "label": "Supportive",
-        "description": "Mani validates your experience with warmth and encouragement",
-        "opening": "How can I support you today?"
+        "description": "Mani validates your experience with warmth and encouragement"
       },
       "reflective": {
         "label": "Reflective",
-        "description": "Mani reflects back what you share to help you explore it more deeply",
-        "opening": "What's on your mind today?"
+        "description": "Mani reflects back what you share to help you explore it more deeply"
       }
     },
     "navHome": "Home",
@@ -175,7 +202,10 @@
     "messagesListLabel": "Chat messages",
     "crisisBannerText": "Chat is paused. Tap to view support resources.",
     "crisisBannerLabel": "View crisis resources",
-    "crisisBannerHint": "Opens a drawer with safety support information and helpline resources"
+    "crisisBannerHint": "Opens the safety screen with helplines",
+    "stillThinking": "Still thinking. This reply is taking a little longer than usual.",
+    "sendFailed": "Your message didn't send.",
+    "retrySendLabel": "Try sending your message again"
   },
   "crisis": {
     "buttonLabel": "I need support",
@@ -185,7 +215,7 @@
     "intro": [
       "You deserve support that keeps you safe.",
       "If you are in immediate danger or feel at risk, you need real human help right now.",
-      "Mani cannot provide emergency care — but Mani can guide you to the right place."
+      "Mani cannot provide emergency care, but Mani can guide you to the right place."
     ],
     "guidance": [
       {
@@ -201,12 +231,41 @@
         "body": "Use one of the helplines below. These are confidential and available at all hours."
       }
     ],
-    "actions": [
-      "Grounding support",
-      "Create a safety plan",
-      "Crisis helplines",
-      "Child helplines"
-    ],
-    "disclaimer": "Mani offers emotional support and simple tools to help you sort what you're feeling. It does not replace medical, psychiatric, or crisis intervention services."
+    "disclaimer": "Mani offers emotional support and simple tools to help you sort what you're feeling. It does not replace medical, psychiatric, or crisis intervention services.",
+    "help": {
+      "supportLine": "If you are thinking about suicide or you need immediate support call or text {number} to connect with a trained crisis counselor",
+      "emergencyLine": "If you are in immediate danger, call {number}.",
+      "callNow": "Call {number} now.",
+      "call": "Call {number}",
+      "text": "Text {number}",
+      "directory": "Outside the US: {site}",
+      "linkHint": "Opens your phone or browser"
+    },
+    "pause": {
+      "title": "Chat is temporary unavailable",
+      "library": "You can still access our Library resources.",
+      "getHelpNow": "Get help now",
+      "visitLibrary": "Visit library",
+      "closeLabel": "Close safety screen",
+      "pausedFor": "For your safety, chat is paused for {length}.",
+      "opensAt": "Chat opens again at {time}.",
+      "units": {
+        "hour": {
+          "one": "{count} hour",
+          "other": "{count} hours"
+        },
+        "minute": {
+          "one": "{count} minute",
+          "other": "{count} minutes"
+        },
+        "second": {
+          "one": "{count} second",
+          "other": "{count} seconds"
+        }
+      }
+    }
+  },
+  "disclosure": {
+    "aiCompanion": "MANI is an AI companion, not a therapist."
   }
 }

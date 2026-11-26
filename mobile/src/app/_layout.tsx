@@ -1,20 +1,23 @@
-import { Stack } from "expo-router";
-import { DrawerProvider } from "@/providers";
+// ABOUTME: Root layout: holds the splash screen until the session is known, then renders the
+// ABOUTME: guarded route stack inside the app-wide providers and the global drawer.
+
+import * as SplashScreen from "expo-splash-screen";
+import { ChatSafetyProvider, DrawerProvider, OnboardingProvider } from "@/providers";
 import { GlobalDrawer } from "@/components/global-drawer";
+import { RootStack } from "@/components/navigation";
 import "../global.css";
+
+SplashScreen.preventAutoHideAsync();
 
 export default function RootLayout() {
   return (
-    <DrawerProvider>
-      <Stack screenOptions={{ headerShown: false }}>
-        <Stack.Screen name="index" />
-        <Stack.Screen name="chat" />
-        <Stack.Screen name="settings" />
-        <Stack.Screen name="exercises" />
-        <Stack.Screen name="change-password" options={{ presentation: "modal" }} />
-        <Stack.Screen name="change-email" options={{ presentation: "modal" }} />
-      </Stack>
-      <GlobalDrawer />
-    </DrawerProvider>
+    <OnboardingProvider>
+      <DrawerProvider>
+        <ChatSafetyProvider>
+          <RootStack />
+          <GlobalDrawer />
+        </ChatSafetyProvider>
+      </DrawerProvider>
+    </OnboardingProvider>
   );
 }
