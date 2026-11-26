@@ -25,6 +25,11 @@ GIST_CHARS = 80
 OPENING_WORDS = 4
 DECLINED = "declined"
 FINISHED = "finished"
+# A request they made (an example, the words to say, help deciding, a tool, what to do) that the latest reply did not
+# fully give, as that reply wrote it; shown to the next turn until a reply gives it (muhammad's email of 2026-11-25:
+# "MANI remembers and keeps user requests in mind on every turn").
+PENDING_REQUEST = "pending_request"
+REQUEST_CHARS = 200
 # The library section the conversation is closest to, as the latest reply that named a valid one said.
 LIBRARY = "library"
 # The safety keys: where the question owed after a pause stands, whether a worry settled and whether danger was reached

@@ -960,3 +960,19 @@ async def test_the_reply_the_steps_follow_begins_no_stage(alice, model):
     assert (await technique_of(alice, thread.id)).phase == "steps"
     await send(alice, thread.id, "Start ABCDE")
     assert scripted.calls == 5 and (await technique_of(alice, thread.id)).phase == "activate"
+
+
+async def test_a_request_not_yet_given_is_put_to_every_later_turn_until_a_reply_gives_it(alice, model):
+    """muhammad's email of 2026-11-25: MANI keeps the person's request in mind on every turn, wherever they make it."""
+    scripted = model(
+        said("Before the words, one thing: who will be there?", request_open="the words to say to my sister"),
+        said("Okay, a party.", request_open="the words to say to my sister"),
+        said('Something like: "I can\'t lend money this time, and I love you."'),
+        said("Glad that helps."))
+    thread = await start(alice)
+    await send(alice, thread.id, "can you give me the words to say to my sister?")
+    await send(alice, thread.id, "it's at her party")
+    assert "They asked for something you have not fully given yet: the words to say to my sister" in facts_of(scripted)
+    await send(alice, thread.id, "ok")
+    await send(alice, thread.id, "thanks")
+    assert "have not fully given yet" not in facts_of(scripted)

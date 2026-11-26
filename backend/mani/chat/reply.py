@@ -112,6 +112,10 @@ class TurnReply(BaseModel):
         "or believe, why they or someone else did something, what something says about them, or what will happen), "
         "copied word for word. Empty when every sentence stays with their own words. Code checks each one is said as "
         "a possibility."))
+    request_open: str = Field(default="", description=(
+        "When they have asked you for something specific (an example, the words to say, help deciding, a tool, what to "
+        "do) and this reply does not fully give it, that request in a few of their words. Empty when there is none, "
+        "when this reply gives it, or when they have said they no longer want it."))
     said: Said = Field(default_factory=Said, description="What your text gives them.")
     action: Action = Field(
         default="none", description="What happens after this reply."

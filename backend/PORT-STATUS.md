@@ -376,6 +376,12 @@ the same change as the work.**
   `reply_check` (migration 050); trace `reply_checked` lists what was found. `mani/chat/check.py`
   (`problems`, `acceptable`), `enforce.FIGURATIVE_PHRASES`, `INTERPRETIVE_PATTERNS`; `tests/unit/test_check.py`,
   `tests/integration/test_reply_check.py`. Release: 050 before the deploy. Not yet measured live.
+- **A request they made that a reply did not fully give (an example, the words to say, help deciding, a tool, what to
+  do) is kept in the thread record and put to every later turn until a reply gives it or they say they no longer want
+  it** (muhammad, 2026-11-25). Because muhammad told the client the same day that MANI "remembers and keeps user
+  requests in mind on every turn … irrespective of where in the cadence the user places the request", and only the
+  prompt and the notes held it. `TurnReply.request_open`, record key `pending_request`, `facts.facts`;
+  `test_a_request_not_yet_given_is_put_to_every_later_turn_until_a_reply_gives_it`. Not shown during a safety worry.
 - **When it is unclear who did something or who is expected to do it, Mani asks who before building on it; with one
   side of a conflict heard, it never concludes who was right or that they are not respected; once they have said what
   they want from someone, Directive offers two or three concrete next steps with their costs, the choice theirs**

@@ -74,6 +74,9 @@ def facts(
     if notes := record.get(rec.NOTES):
         lines.append(f"Your notes from your last turn: {notes}")
     lines += understanding_lines(record)
+    if (pending := record.get(rec.PENDING_REQUEST)) and not holding:
+        lines.append(f"They asked for something you have not fully given yet: {pending}. Give it in this reply, "
+                     "wherever the conversation is, unless they have since said they no longer want it.")
     if running is not None and (framework := config.registry.get(running.framework_id)):
         lines.append(_running_line(framework, running.phase, held=holding))
     lines += ledger_lines(rec.replies(record), open_chat=running is None and not holding)

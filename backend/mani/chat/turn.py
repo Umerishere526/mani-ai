@@ -361,6 +361,10 @@ def _updates(ctx, reply: TurnReply, decision, judgment, *, record, check, answer
                               events=[e.model_dump() for e in reply.events], declined=decision.declined,
                               finished=decision.finished, library=decision.library)
     after = rec.with_answer(after, reply.question.answered)
+    if pending := reply.request_open.strip()[:rec.REQUEST_CHARS]:
+        after[rec.PENDING_REQUEST] = pending
+    else:
+        after.pop(rec.PENDING_REQUEST, None)
     if entry is not None:
         after = rec.with_reply(after, **entry)
     after = worry.record_after(after, judgment, check=check, answering=answering)
