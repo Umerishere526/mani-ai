@@ -17,14 +17,8 @@ from mani.db.threads import TurnContext
 
 _DANGER = {"none": "none", "unsure": "unsure", "danger": "now"}
 # An unsure worry they never answered closes once this many messages in a row are read as no concern (muhammad,
-# 2026-11-20): one such message can be a changed subject, and a worry nobody closes holds every later turn. Danger
-# closes the same way, counted from Mani's reply to it, which asked about their safety, unless they say they are safe
-# or someone is with them (S1). PROVISIONAL: clinician sign-off required before deploy.
+# 2026-11-20): one such message can be a changed subject, and a worry nobody closes holds every later turn.
 CALM_TO_CLEAR = 2
-# How hard the model thinks on a turn held for safety, in place of the prompt row's effort: a crisis reply must come
-# fast (manasa's crisis test, 2026-11-25). Safety judgment at this effort is unmeasured until the safety eval cases and
-# the recall set run at it. CR-4, PROVISIONAL: clinician sign-off required before deploy.
-HELD_REASONING_EFFORT = "low"
 
 
 class Phase(StrEnum):
@@ -37,11 +31,10 @@ class Phase(StrEnum):
 
 class Standing(BaseModel):
     """Where safety stands before their message. `about` is whose danger the open worry is about, and is None while
-    nothing is open. `settled`: a worry of theirs settled earlier in this conversation. `calm`: how many messages in a
-    row were read as no concern while the worry, unsure or danger, stayed open. `end_check`: Mani's last reply asked the safety question
-    after a framework's last stage, so this message answers it. `overdose`: the open worry is about an overdose or a
-    poisoning. `immediacy`: whether they said if a worry about themselves is immediate (rec.IMMEDIACY_OPEN or
-    rec.IMMEDIACY_ANSWERED), None before they confirmed the thoughts. `paused`: the open worry paused the chat."""
+    nothing is open. `settled`: a worry of theirs settled earlier in this conversation. `reset`: the worry the
+    conversation held was settled by their word elsewhere that they are all right. `calm`: how many messages in a row
+    were read as no concern while the worry stayed open. `end_check`: Mani's last reply asked the safety question after
+    a framework's last stage, so this message answers it."""
 
     model_config = {"frozen": True}
 
@@ -49,11 +42,9 @@ class Standing(BaseModel):
     about: str | None
     phase: Phase
     settled: bool = False
+    reset: bool = False
     calm: int = 0
     end_check: bool = False
-    overdose: bool = False
-    immediacy: str | None = None
-    paused: bool = False
 
 
 @dataclass(frozen=True)
@@ -64,38 +55,30 @@ class Outcome:
     about: str | None
     pausing: bool
     settled_now: bool
-    # The reply must say where to get help: the first danger of its kind that does not pause (S2), even with someone
-    # with them (S7), and every later reply that does not pause while danger about a person is held (CR-3).
-    # PROVISIONAL: clinician sign-off required before deploy.
-    resources_due: bool = False
+    # Code raised this turn to danger on a body worry the model itself judged lower, so the reply gets the call-now line,
+    # once per body worry.
+    body_emergency: bool = False
     calm: int = 0
-    # Code raised the model's read to danger on a high-risk phrase (S4).
-    raised: bool = False
-    # The open worry is about an overdose or a poisoning, as the model marked it on this message or an earlier one.
-    overdose: bool = False
-    # Where the question of immediate danger to themselves stands after this message (CR-1).
-    immediacy: str | None = None
-    # The open worry paused the chat, on this message or an earlier one (CR-5).
-    paused: bool = False
-
-    @property
-    def paused_for(self) -> str | None:
-        """What a pause is for, so a client can lead with 911 after an overdose (R90): overdose, or whose danger it is.
-        PROVISIONAL: clinician sign-off required before deploy."""
-        return "overdose" if self.overdose else self.about
 
 
 def standing(ctx: TurnContext, check: ReturnCheck | None, answering: str | None) -> Standing:
-    """Where the conversation stands as this turn begins."""
+    """Where the conversation stands as this turn begins. A conversation still holding a worry that began before they
+    said, in any conversation, that they are all right stands settled: the pause began in one that was never answered
+    in, and its next message used to pause with no word from Mani."""
     record = ctx.thread.understanding or {}
+    state, about = State(ctx.thread.safety), record.get(rec.ABOUT)
+    latest = ctx.pause
+    reset = (state is not State.CLEAR and latest is not None and latest.checked_at is not None
+             and latest.checked_at > ctx.thread.last_message_at)
+    if reset:
+        state, about = State.CLEAR, None
     phase = Phase.ASKING if check is not None else Phase.ANSWERING if answering is not None else Phase.ORDINARY
-    return Standing(state=State(ctx.thread.safety), about=record.get(rec.ABOUT), phase=phase,
-                    settled=bool(record.get(rec.SAFETY_SETTLED)), calm=record.get(rec.CALM, 0),
-                    end_check=rec.end_check(record) == rec.END_CHECK_ASKED, overdose=bool(record.get(rec.OVERDOSE)),
-                    immediacy=record.get(rec.IMMEDIACY), paused=bool(record.get(rec.PAUSED)))
+    return Standing(state=state, about=about, phase=phase, settled=bool(record.get(rec.SAFETY_SETTLED)), reset=reset,
+                    calm=0 if reset else record.get(rec.CALM, 0),
+                    end_check=rec.end_check(record) == rec.END_CHECK_ASKED)
 
 
-def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
+def step(stood: Standing, read: Safety) -> Outcome:
     """The state after their message, and whether the chat pauses.
 
     A question owed after a pause makes this a safety turn that never pauses, which starts from unsure: safety is not
@@ -108,14 +91,7 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
     Danger to themselves, to someone else or from someone pauses without a refusal. A danger about a symptom in the
     body pauses only when this turn's read has the symptom happening now and they refuse the help for it, at the level
     code holds it (a symptom the model judged unsure counts as danger), and a danger
-    of no known kind needs a refusal too, even while a body worry is open.
-
-    A message holding one of the client's high-risk phrases that the model read below danger is danger about
-    themselves, with the help due and no pause on that message (S4). PROVISIONAL: clinician sign-off required before
-    deploy."""
-    floored = read.level != "danger" and safety.high_risk(message)
-    if floored:
-        read = read.model_copy(update={"level": "danger", "about": "themselves"})
+    of no known kind needs a refusal too, so a read without `about` never pauses a body chat."""
     start = State.UNSURE if stood.phase is Phase.ASKING and stood.state is State.CLEAR else stood.state
     danger = _DANGER[read.level]
     about = read.about or stood.about
@@ -127,22 +103,12 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
     # The danger as code holds it: a body symptom the model judged lower that has not stopped is danger now.
     held = safety.danger_of(danger, read.about, read.symptom_now, reopening=reopening)
     after = safety.after(start, held, read.declined, about=about, danger_about=stood.about)
-    # With no question of Mani's being answered, the first message read as no concern leaves the worry where it was:
-    # unsure, or danger unless they said they are safe or someone is with them (S1).
-    safe_said = read.says_safe or read.help_in_place
-    counting = ((stood.state is State.UNSURE or (stood.state is State.DANGER and not safe_said))
-                and stood.phase is Phase.ORDINARY and not stood.end_check
-                and after is State.CLEAR and stood.calm + 1 < CALM_TO_CLEAR)
-    # Danger that paused the chat closes only on their word that they are safe or someone is with them, in any phase
-    # and however many calm messages come (CR-5, PROVISIONAL: clinician sign-off required before deploy).
-    held_to_word = stood.paused and stood.state is State.DANGER and not safe_said and after is State.CLEAR
-    waits = counting or held_to_word
+    # Unsure with no question of Mani's being answered: the first message read as no concern leaves the worry open.
+    waits = (stood.state is State.UNSURE and stood.phase is Phase.ORDINARY and not stood.end_check
+             and after is State.CLEAR and stood.calm + 1 < CALM_TO_CLEAR)
     if waits:
-        after = stood.state
-    if about == "body" and read.about is None and danger != "none":
-        # A danger of no known kind while a body worry is open is not held to the body's rule: it needs a refusal.
-        kind_pauses = read.declined
-    elif about == "body":
+        after = State.UNSURE
+    if about == "body":
         kind_pauses = read.declined and held == "now" and read.symptom_now == "yes"
     else:
         kind_pauses = read.declined or about is not None
@@ -154,57 +120,24 @@ def step(stood: Standing, read: Safety, message: str = "") -> Outcome:
         goes_on = asked and danger == "now"
     else:
         goes_on = stood.state is State.DANGER
-    # Danger held only by the count of calm messages is not danger going on, so it never pauses.
-    pausing = after is State.DANGER and not waits and not floored and kind_pauses and not read.help_in_place and goes_on
-    # The first danger of each kind; and while danger about a person is held, every reply, unless their message says
-    # someone is with them (S7). A body symptom's line comes once per rise (muhammad, 2026-11-18). CR-3, PROVISIONAL:
-    # clinician sign-off required before deploy.
-    first_of_kind = stood.state is not State.DANGER or stood.about != about
-    resources_due = (after is State.DANGER and not pausing
-                     and (first_of_kind or (about != "body" and not read.help_in_place)))
+    # Once per body worry: a conversation already in danger over the body has had the line; danger of another kind has not.
+    body_emergency = (read.about == "body" and read.level != "danger" and after is State.DANGER
+                      and (stood.state is not State.DANGER or stood.about != "body"))
     return Outcome(
-        immediacy=_immediacy(stood, read, after, about, safe_said),
-        state=after, about=about if after is not State.CLEAR else None, pausing=pausing,
-        settled_now=stood.state is not State.CLEAR and after is State.CLEAR,
-        resources_due=resources_due, calm=stood.calm + 1 if counting else 0, raised=floored,
-        paused=after is not State.CLEAR and (pausing or stood.paused),
-        overdose=after is not State.CLEAR and (read.overdose or stood.overdose),
+        state=after, about=about if after is not State.CLEAR else None,
+        pausing=after is State.DANGER and kind_pauses and not read.help_in_place and goes_on,
+        settled_now=stood.reset or (stood.state is not State.CLEAR and after is State.CLEAR),
+        body_emergency=body_emergency, calm=stood.calm + 1 if waits else 0,
     )
 
 
-def _immediacy(stood: Standing, read: Safety, after: State, about: str | None, safe_said: bool) -> str | None:
-    """Where the question of immediate danger to themselves stands after this message: open once they confirm thoughts
-    of not being here or of hurting themselves (a danger read, or an unsure one after Mani asked about this worry), and
-    answered once their message says whether it is immediate or that they are safe. CR-1, PROVISIONAL: clinician
-    sign-off required before deploy."""
-    if after is State.CLEAR or about != "themselves":
-        return None
-    if read.immediacy_said or safe_said:
-        return rec.IMMEDIACY_ANSWERED
-    if stood.phase is Phase.ASKING:
-        # Back after a pause, time has passed: code's question asks it again (CR-5).
-        return rec.IMMEDIACY_OPEN
-    if stood.immediacy == rec.IMMEDIACY_ANSWERED:
-        return rec.IMMEDIACY_ANSWERED
-    asked = stood.state is not State.CLEAR and stood.about in (None, "themselves")
-    confirmed = read.about == "themselves" and (read.level == "danger" or (read.level == "unsure" and asked))
-    return rec.IMMEDIACY_OPEN if confirmed or stood.immediacy == rec.IMMEDIACY_OPEN else None
-
-
 def record_after(record: dict, outcome: Outcome, *, check: ReturnCheck | None, answering: str | None) -> dict:
-    """The record with where the return check stands, whose danger the open worry is about and whether it is an overdose
-    (both forgotten when it settles), how many calm messages an open worry has had, whether this conversation reached
-    danger, and whether a worry settled."""
-    after = {key: value for key, value in record.items()
-             if key not in (rec.ABOUT, rec.CALM, rec.OVERDOSE, rec.IMMEDIACY, rec.PAUSED)}
+    """The record with where the return check stands, whose danger the open worry is about (forgotten when it settles),
+    how many calm messages an open worry has had, whether this conversation reached danger, and whether a worry
+    settled."""
+    after = {key: value for key, value in record.items() if key not in (rec.ABOUT, rec.CALM)}
     if outcome.about:
         after[rec.ABOUT] = outcome.about
-    if outcome.immediacy:
-        after[rec.IMMEDIACY] = outcome.immediacy
-    if outcome.paused:
-        after[rec.PAUSED] = True
-    if outcome.overdose:
-        after[rec.OVERDOSE] = True
     if outcome.calm:
         after[rec.CALM] = outcome.calm
     if check is not None:
@@ -222,7 +155,5 @@ def traced(read: Safety) -> dict:
     """The judgment as the turn's trace keeps it: closed values only, never its line of why."""
     return {key: value for key, value in {
         "level": read.level, "about": read.about, "declined": read.declined or None, "symptom_now": read.symptom_now,
-        "help_in_place": read.help_in_place or None, "says_safe": read.says_safe or None,
-        "overdose": read.overdose or None, "immediacy_said": read.immediacy_said or None,
-        "still_there": read.still_there or None,
+        "help_in_place": read.help_in_place or None, "still_there": read.still_there or None,
     }.items() if value is not None}

@@ -7,7 +7,6 @@ import uuid
 
 from mani.chat.facts import facts, framework_guide, offerable, system_prompt
 from mani.chat.safety import State
-from mani.chat.worry import Phase, Standing
 from mani.db.threads import TurnContext
 from mani.models.rows import Prompt, Thread
 from mani.prompts.cache import Config
@@ -30,7 +29,7 @@ def ctx(safety: str = "clear") -> TurnContext:
 def facts_for(context: TurnContext, **given) -> str:
     base = dict(record={}, style="supportive", running=None, open_offer=None, event=None, wants_title=False,
                 return_check=None, answering_return=None, end_check_asked=False, holding=False, person_messages=5,
-                stood=Standing(state=State(context.thread.safety), about=None, phase=Phase.ORDINARY))
+                state=State(context.thread.safety))
     return facts(context, CONFIG, **{**base, **given})
 
 
@@ -191,20 +190,3 @@ def test_nothing_may_be_offered_when_code_would_refuse_it_and_the_facts_say_so()
                     dict(record={"declined": ALL_SETS})):
         assert offerable_for(**refused) == (), refused
     assert "You cannot offer" in facts_for(ctx(), record={"declined": ALL_SETS})
-
-
-def test_held_danger_tells_the_reply_to_keep_the_emergency_guidance():
-    """CR-3 (PROVISIONAL: clinician sign-off required before deploy): the guidance never steps down while danger holds."""
-    assert "never step it down" in facts_for(ctx(safety="danger"), holding=True)
-    assert "never step it down" not in facts_for(ctx(safety="unsure"), holding=True)
-
-
-def test_an_open_question_of_immediate_danger_tells_the_reply_to_ask_it_before_anything_else():
-    """CR-1 (PROVISIONAL: clinician sign-off required before deploy)."""
-    open_ = Standing(state=State.UNSURE, about="themselves", phase=Phase.ORDINARY, immediacy="open")
-    text = facts_for(ctx(safety="unsure"), holding=True, stood=open_)
-    assert "alone right now" in text and "No reflective or exploring question" in text
-    asked = Standing(state=State.UNSURE, about="themselves", phase=Phase.ORDINARY)
-    assert "If their message confirms" in facts_for(ctx(safety="unsure"), holding=True, stood=asked)
-    answered = open_.model_copy(update={"immediacy": "answered"})
-    assert "alone right now" not in facts_for(ctx(safety="unsure"), holding=True, stood=answered)

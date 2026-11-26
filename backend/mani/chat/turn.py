@@ -15,7 +15,7 @@ import asyncpg
 from mani.auth.jwt import Claims
 from mani.chat import crisis, decide as decide_mod, enforce, facts, pause, questions, record as rec, rewind, safety, taps, worry
 from mani.chat.greeting import (
-    COPIED_BACK, OPENERS, STYLE_OPTIONS, greeting, resolve_style,
+    COPIED_BACK, STYLE_OPTIONS, greeting, openers, resolve_style,
 )
 from mani.chat.repairs import clean_title, start_buttons
 from mani.chat.reply import TurnReply, shaped
@@ -50,8 +50,6 @@ class Turn:
     crisis_detected: bool = False
     paused_from: dt.datetime | None = None
     paused_until: dt.datetime | None = None
-    # What the pause this turn started is for: overdose, or whose danger it is (R90).
-    paused_for: str | None = None
     was_duplicate: bool = False
     needs_summary: bool = False
     llm_call_id: uuid.UUID | None = None
@@ -197,40 +195,32 @@ async def _respond(
         open_offer=told_offer if tap.demonstrate is None else None,
         event=(facts.HELD_START if tap.starting else None) if held and (tap.starting or tap.demonstrate) else tap.fact,
         wants_title=wants_title,
-        return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, stood=stood,
+        return_check=check, answering_return=answering, end_check_asked=end_check_asked, holding=held, state=before,
         person_messages=person_messages,
     )
     # The schema offers only what the facts allow, so a reply code already knows it would refuse is never written.
     shape = shaped(facts.offerable(config, record=record, running=told_running, open_offer=told_offer, holding=held,
                                    person_messages=person_messages, state=before))
     model, parameters, routing = composer.model_settings(config, "mani")
-    try:
-        call = await ask(
-            [{"role": "system", "content": facts.system_prompt(config, ctx, summary_due=bool(window.dropped))}]
-            + conversation(history)
-            + [{"role": "user", "content": content}, {"role": "system", "content": told}],
-            shape, model=model, purpose=llm_calls.Purpose.CHAT,
-            temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
-            max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
-            reasoning_effort=worry.HELD_REASONING_EFFORT if holding else parameters.get("reasoning_effort"),
-            routing=routing, user_id=claims.user_id,
-            thread_id=ctx.thread.id, prompt_version_id=None,
-        )
-        if call is None:
-            return await _unanswered(conn, ctx, content, crisis.CRISIS_REPLY if holding else crisis.TROUBLE_REPLY,
-                                     before=before, tapped=tapped, client_message_id=client_message_id,
-                                     needs_summary=_summary_due(ctx, window))
-        return await _apply(conn, ctx, call, content=content, tapped=tapped, tap=tap, record=record, running=running,
-                            open_offer=open_offer, check=check, answering=answering, stood=stood, holding=holding,
-                            wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
-                            client_message_id=client_message_id, settings=settings, answer_failure=answer_failure,
-                            style=style_name, person_messages=person_messages)
-    except ServiceError as error:
-        # Any refusal while a worry is held names where to get help (S9, S10). PROVISIONAL: clinician sign-off
-        # required before deploy.
-        if not holding:
-            raise
-        raise crisis.with_help(error) from error
+    call = await ask(
+        [{"role": "system", "content": facts.system_prompt(config, ctx, summary_due=bool(window.dropped))}]
+        + conversation(history)
+        + [{"role": "user", "content": content}, {"role": "system", "content": told}],
+        shape, model=model, purpose=llm_calls.Purpose.CHAT,
+        temperature=parameters.get("temperature", client.DEFAULT_TEMPERATURE),
+        max_tokens=parameters.get("maxTokens", client.DEFAULT_MAX_TOKENS),
+        reasoning_effort=parameters.get("reasoning_effort"), routing=routing, user_id=claims.user_id,
+        thread_id=ctx.thread.id, prompt_version_id=None,
+    )
+    if call is None:
+        return await _unanswered(conn, ctx, content, crisis.CRISIS_REPLY if holding else crisis.TROUBLE_REPLY,
+                                 before=before, tapped=tapped, client_message_id=client_message_id,
+                                 needs_summary=_summary_due(ctx, window))
+    return await _apply(conn, ctx, call, content=content, tapped=tapped, tap=tap, record=record, running=running,
+                        open_offer=open_offer, check=check, answering=answering, stood=stood, holding=holding,
+                        wants_title=wants_title, end_check_asked=end_check_asked, window=window, config=config,
+                        client_message_id=client_message_id, settings=settings, answer_failure=answer_failure,
+                        style=style_name, person_messages=person_messages)
 
 
 async def _apply(
@@ -240,7 +230,7 @@ async def _apply(
 ) -> Turn:
     """What the reply decides, written in this transaction."""
     reply: TurnReply = call.value
-    judgment = worry.step(stood, reply.safety, content)
+    judgment = worry.step(stood, reply.safety)
     # A worry open on the thread or found in this message comes before anything the reply asks for, except the
     # answer that settles the safety question after a framework's last stage: that one carries the close.
     settles_end_check = end_check_asked and judgment.state is safety.State.CLEAR
@@ -256,19 +246,17 @@ async def _apply(
     )
     ask = ""
     if judgment.pausing:
-        # The model wrote its reply before code decided to pause, so its words can invite more conversation the pause
-        # then blocks (TC-S3, 2026-11-25: a work question under the pause). A pausing turn says only code's pause words,
-        # where to get help first. CR-7, PROVISIONAL: clinician sign-off required before deploy.
-        text = crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)
+        # Mani's own words for this danger come first, then the pause line (muhammad, 2026-11-20). A question it chose
+        # that its text already asks is not asked twice.
+        repeated = enforce.repeats(reply.text, reply.question.ask)
+        enforced += [enforce.REPEATED_QUESTION] if repeated else []
+        text = "\n\n".join(part for part in (
+            reply.text.strip(), "" if repeated else reply.question.ask.strip(),
+            crisis.pause_reply(judgment.about, settings.crisis_pause_seconds)) if part)
     elif decision.end_check:
         text = crisis.END_CHECK
     elif check is not None:
-        text = (crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger"
-                else crisis.return_check_reply(judgment.about or stood.about))
-    elif answering is not None and judgment.state is safety.State.CLEAR:
-        # Their answer that they are all right gets code's one follow-up in place of the reply's question (S12).
-        # PROVISIONAL: clinician sign-off required before deploy.
-        text, ask = reply.text, crisis.AFTER_PAUSE_FOLLOW_UP
+        text = crisis.RETURN_DANGER_REPLY if reply.safety.level == "danger" else crisis.RETURN_CHECK_REPLY
     else:
         text, ask = reply.text, reply.question.ask
     # Every reply asks one question at most, its own, after its text; a guarded turn's words lose nothing. The open
@@ -299,12 +287,9 @@ async def _apply(
         text = (crisis.CRISIS_REPLY if holding or judgment.state is not safety.State.CLEAR
                 else crisis.TROUBLE_REPLY)
         decision = decide_mod.Decision(declined=rec.declined(record), finished=rec.finished(record))
-    # Code's own pieces follow the reply only once it says something: where to get help, and the five steps. The first
-    # danger of a kind always names its numbers (S2, S7). PROVISIONAL: clinician sign-off required before deploy.
-    added_help = crisis.help_missing(text, judgment.about) if judgment.resources_due else None
-    resources_added = added_help is not None
-    if resources_added:
-        text = f"{text}\n\n{added_help}"
+    # Code's own pieces follow the reply only once it says something: the call-now line, and the five steps.
+    if judgment.body_emergency and not judgment.pausing:
+        text = f"{text}\n\n{crisis.BODY_EMERGENCY}"
     if decision.show_steps is not None:
         text = f"{text}\n\n{steps_text(decision.show_steps, style)}"
     prompts = decision.prompts
@@ -317,12 +302,12 @@ async def _apply(
     )
     await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
     flagged = await _record_danger(conn, ctx, stood.state, judgment, pair)
-    paused = await _pause_writes(conn, ctx, judgment, reply, pair=pair,
+    paused = await _pause_writes(conn, ctx, judgment, reply, answering=answering, pair=pair,
                                  seconds=settings.crisis_pause_seconds)
     trace = {key: value for key, value in {
         "action": reply.action, "framework": reply.framework, "stage": reply.stage,
         "safety": worry.traced(reply.safety), "paused": judgment.pausing or None,
-        "resources_added": resources_added or None, "raised_by_phrase": judgment.raised or None,
+        "body_emergency": (judgment.body_emergency and not judgment.pausing) or None,
         "buttons": [p.label for p in prompts], "latency_ms": call.latency_ms, "first_token_ms": call.first_token_ms,
         "refused": decision.refused,
         "question_cut": cut, "enforced": enforced, "reply_checked": list(call.checked) or None, "question": reply.question.model_dump() if open_chat and settings.ai_debug_mode else None,
@@ -332,7 +317,6 @@ async def _apply(
         message_id=pair.mani_message_id, content=text, created_at=pair.created_at, prompts=prompts,
         title=updates.title or ctx.thread.title, crisis_detected=flagged or judgment.state is safety.State.DANGER,
         paused_from=paused.started_at if paused else None, paused_until=paused.ends_at if paused else None,
-        paused_for=paused.paused_for if paused else None,
         was_duplicate=pair.was_duplicate, needs_summary=_summary_due(ctx, window) and not judgment.pausing,
         llm_call_id=call.call_id, understanding=after if settings.ai_debug_mode else None, trace=trace,
         raw_reply=call.value.model_dump(mode="json") if settings.ai_debug_mode else None,
@@ -401,13 +385,14 @@ async def _record_danger(conn, ctx, before: safety.State, judgment, pair) -> boo
     return True
 
 
-async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, pair, seconds):
-    """A pausing turn starts a pause."""
+async def _pause_writes(conn, ctx, judgment, reply: TurnReply, *, answering, pair, seconds):
+    """An answer to the return check that settles it marks that pause checked; a pausing turn starts a pause."""
     if pair.was_duplicate:
         return None
+    if answering is not None and judgment.state is safety.State.CLEAR:
+        await pauses.mark_checked(conn, answering)
     if judgment.pausing:
-        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why,
-                                  judgment.paused_for)
+        return await pauses.start(conn, ctx.thread.user_id, ctx.thread.id, seconds, reply.safety.why)
     return None
 
 
@@ -470,11 +455,16 @@ async def _fixed_step(conn, ctx, content, text: str, prompts: list[SmartPrompt],
 
 
 async def _open_in_style(conn, ctx, content: str, style: SupportStyle, client_message_id) -> Turn:
-    """The chosen style, with that style's fixed opener and no model call."""
-    reply = OPENERS[style.value]
+    """The chosen style, with that style's fixed opener and no model call. While a pause that has run out still owes
+    the question how things are, that question is the opener, and it is recorded as asked."""
+    check = pause.return_check(ctx)
+    reply = openers(check is not None)[style.value]
     pair = await messages_db.create_pair(conn, ctx.thread.id, content, reply, selected_prompt=content.strip(),
                                          client_message_id=client_message_id)
-    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, threads.ThreadUpdates(conversation_style=style))
+    updates = threads.ThreadUpdates(conversation_style=style)
+    if check is not None and not pair.was_duplicate:
+        updates.understanding = rec.return_check(ctx.thread.understanding or {}, str(check.pause_id), "asked")
+    await threads.apply(conn, ctx.thread.id, ctx.thread.user_id, updates)
     return Turn(message_id=pair.mani_message_id, content=reply, created_at=pair.created_at, title=ctx.thread.title)
 
 

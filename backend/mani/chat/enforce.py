@@ -17,12 +17,8 @@ from mani.models.rows import Framework
 FORBIDDEN_WORDS = ("heaviest", "weakness", "fixing", "fixed", "space", "broken", "flawed", "stable", "stability",
                    "damaged", "problematic", "baggage", "trauma", "unhealthy", "land", "weak", "toxic", "negative",
                    "struggling", "journey", "landscape")
-# Safety Guardrails, section 6: lines Mani never says. After them, the presence and burden lines from manasa's crisis
-# test (2026-11-25, CR-6): Mani promises no presence it cannot give and never makes them feel a burden.
-# PROVISIONAL: clinician sign-off required before deploy.
-BANNED_PHRASES = ("i am here for you", "i'm here for you", "you are not alone", "you're not alone", "i care about you",
-                  "i'm not going anywhere", "i'm still here", "i'll be here", "i'm here with you",
-                  "heavier than i can hold", "more than i can hold")
+# Safety Guardrails, section 6: lines Mani never says.
+BANNED_PHRASES = ("i am here for you", "i'm here for you", "you are not alone", "you're not alone", "i care about you")
 # A plain word for each forbidden one, used when the model still writes it. Each keeps the sentence's grammar in the
 # uses seen in the eval and suite runs ("they land hard", "you were struggling", "room to think").
 PLAIN_WORDS = {
@@ -40,8 +36,6 @@ PLAIN_WORDS = {
     "fix": "repair", "fixes": "repairs", "weaknesses": "limits", "spaces": "rooms", "journeys": "paths",
     "traumas": "painful times", "traumatic": "painful",
 }
-# A sentence that names where to get help, kept on a guarded turn even when it also says a banned line.
-_NAMES_HELP = re.compile(r"\b(?:911|988|1-800-\d{3}-\d{4}|findahelpline)", re.IGNORECASE)
 # Every form, longest first so "landed on" wins over "landed" and "landscape" over "land".
 _FORMS = sorted(PLAIN_WORDS, key=len, reverse=True)
 _FORBIDDEN = re.compile(rf"\b(?:(a|an)(\s+))?({'|'.join(re.escape(form) for form in _FORMS)})\b", re.IGNORECASE)
@@ -265,13 +259,13 @@ def in_plain_words(text: str) -> tuple[str, list[str]]:
 
 
 def without_banned_lines(text: str, ask: str, *, guarded: bool) -> tuple[str, list[str]]:
-    """The text without the sentences that say a banned line, and the events. A question that says one stays, as does a
-    sentence of a guarded turn that names where to get help (CR-6: the lines are cut on crisis turns too, where they
-    were seen) and the text's only words when no question (`ask`) follows; each is recorded as kept."""
+    """The text without the sentences that say a banned line, and the events. A question that says one stays, as does
+    every sentence of a guarded turn and the text's only words when no question (`ask`) follows; each is recorded as
+    kept."""
     if not banned_phrases(f"{text} {ask}"):
         return text, []
-    cut = questions.kept(text, lambda _, sentence: questions.asks(sentence) or not banned_phrases(sentence)
-                         or (guarded and bool(_NAMES_HELP.search(sentence))))
+    cut = text if guarded else questions.kept(
+        text, lambda _, sentence: questions.asks(sentence) or not banned_phrases(sentence))
     if not cut and not ask.strip():
         cut = text
     events = [BANNED_LINE_REMOVED] if cut != text else []

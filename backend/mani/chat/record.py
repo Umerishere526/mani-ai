@@ -38,18 +38,8 @@ RETURN_CHECK = "return_check"
 SAFETY_SETTLED = "safety_settled"
 DANGER_REACHED = "danger_reached"
 ABOUT = "worry_about"
-# Whether the open worry is about an overdose or a poisoning, kept only while it is open, so its pause leads with 911.
-OVERDOSE = "worry_overdose"
 # How many messages in a row were read as no concern while an unsure worry stayed open (worry.CALM_TO_CLEAR).
 CALM = "worry_calm"
-# Whether Mani knows if a worry about themselves is immediate (alone, a plan or the means, acting tonight): open once
-# they confirm the thoughts, answered once they say; kept only while the worry is open (CR-1).
-IMMEDIACY = "worry_immediacy"
-IMMEDIACY_OPEN = "open"
-IMMEDIACY_ANSWERED = "answered"
-# Whether the open worry paused the chat: it then closes only on their word that they are safe or someone is with them
-# (CR-5). Kept only while the worry is open.
-PAUSED = "worry_paused"
 SAFETY_END_CHECK = "safety_end_check"
 # Where the safety question after a framework's last stage stands.
 END_CHECK_ASKED = "asked"

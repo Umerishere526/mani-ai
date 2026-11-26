@@ -7,7 +7,6 @@ import uuid
 
 import asyncpg
 
-from mani.chat import record as rec
 from mani.chat.greeting import OPENING_MESSAGES
 from mani.db import threads
 from mani.db.threads import TurnContext, load_turn_context
@@ -20,6 +19,7 @@ _REFUSALS = {
     "not_last": (ErrorCategory.CONFLICT, "Only your last message can be edited."),
 }
 
+
 def snapshot_of(ctx: TurnContext) -> dict:
     """What the turn about to run will overwrite, as JSON."""
     return {
@@ -28,22 +28,6 @@ def snapshot_of(ctx: TurnContext) -> dict:
         "safety": ctx.thread.safety,
         "technique": ctx.technique.model_dump(mode="json") if ctx.technique else None,
     }
-
-
-def held(snapshot: dict, left: TurnContext) -> dict:
-    """The snapshot an edit restores, never below the danger the conversation reached (S8): that it was reached is kept,
-    and danger the edited turn left open stays open with its kind, so the rewritten message is danger going on.
-    PROVISIONAL: clinician sign-off required before deploy."""
-    now = left.thread.understanding or {}
-    understanding = dict(snapshot.get("understanding") or {})
-    safety = snapshot.get("safety") or "clear"
-    if now.get(rec.DANGER_REACHED):
-        understanding[rec.DANGER_REACHED] = True
-    if left.thread.safety == "danger" and safety != "danger":
-        safety = "danger"
-        understanding.pop(rec.CALM, None)
-        understanding.update({key: now[key] for key in (rec.ABOUT, rec.OVERDOSE) if now.get(key)})
-    return {**snapshot, "understanding": understanding, "safety": safety}
 
 
 async def save(conn: asyncpg.Connection, ctx: TurnContext, user_id: uuid.UUID | str) -> None:
@@ -82,7 +66,7 @@ async def undo_last_turn(
         category, message = _REFUSALS[outcome]
         raise _refuse(category, message)
 
-    await _restore(conn, user_id, thread_id, held(snapshot, ctx))
+    await _restore(conn, user_id, thread_id, snapshot)
 
 
 async def _restore(conn: asyncpg.Connection, user_id, thread_id, snapshot: dict) -> None:

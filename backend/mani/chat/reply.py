@@ -6,7 +6,7 @@ from __future__ import annotations
 from functools import lru_cache
 from typing import Annotated, Literal
 
-from pydantic import BaseModel, Field, create_model, model_validator
+from pydantic import BaseModel, Field, create_model
 from pydantic.json_schema import SkipJsonSchema, WithJsonSchema
 
 from mani.llm.schema import LibrarySection
@@ -20,26 +20,12 @@ class Safety(BaseModel):
         default=None, description="Whose danger. Always filled when level is unsure or danger."
     )
     help_in_place: bool = Field(default=False, description="Someone who can help is with them now, or help is coming.")
-    says_safe: bool = Field(default=False, description=(
-        "Their message itself says plainly that they are safe now. Changing the subject never is."))
     declined: bool = Field(default=False, description="They refused the help you offered for this danger.")
-    overdose: bool = Field(default=False, description=(
-        "They say they took too much of a medicine or drug, or swallowed or breathed in something poisonous."))
     symptom_now: Literal["yes", "no", "unsaid"] | None = Field(
         default=None, description="With about body: whether the symptom is happening right now."
     )
-    immediacy_said: bool = Field(default=False, description=(
-        "Their message says whether they are in immediate danger: whether they are alone right now, have a plan or the "
-        "means, or might act tonight."))
     still_there: bool = Field(default=False, description="Their message itself says the danger is still there, or that they are not safe.")
     why: str | None = Field(default=None, description="One short line on what you judged.")
-
-    @model_validator(mode="after")
-    def _says_whose_danger(self) -> Safety:
-        """A worry with no kind could not be held to its kind's pause rule, so the reply fails and is asked for again."""
-        if self.level != "none" and self.about is None:
-            raise ValueError("about is required when level is unsure or danger")
-        return self
 
 
 class Question(BaseModel):

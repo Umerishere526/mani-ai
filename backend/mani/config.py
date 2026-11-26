@@ -192,9 +192,8 @@ class Settings(BaseSettings):
     # every request - there is no host where an unset secret should mean "open".
     cron_secret: str = Field(default="", repr=False)
 
-    # Seconds the chat stays paused once someone in danger continues with nothing in place: 15 minutes (S6, R89).
-    # PROVISIONAL: clinician sign-off required before deploy.
-    crisis_pause_seconds: int = Field(default=900, ge=1)
+    # Seconds the chat stays paused once someone in danger continues with nothing in place.
+    crisis_pause_seconds: int = Field(default=30, ge=1)
 
     # Paid replies one person may get in 24 hours (muhammad's number). 0 turns it off. Only turns that call the
     # model count, and it never applies while a safety worry is open or a return check is owed.

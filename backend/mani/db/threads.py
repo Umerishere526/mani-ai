@@ -215,14 +215,14 @@ class TurnContext:
     # Another of this person's conversations was flagged for crisis recently. Only the fact
     # crosses threads, never what was said in it.
     recent_crisis: bool = False
-    # This conversation's latest pause that has run out by the database's clock as the pause gate reads it, within
+    # The person's latest pause that has run out by the database's clock as the pause gate reads it, within
     # RECENT_CRISIS_DAYS of its end (an older one owes nothing), with what it rested on: the question whether they are
-    # all right is owed for it here (chat/pause.return_check). Another conversation's pause never loads.
+    # all right is owed for it (chat/pause.return_check), and their word that they are settles a worry held before it.
     pause: Pause | None = None
 
 
-# How long a crisis in one conversation keeps the next ones gentle, and how long a pause that has run out owes its
-# conversation the question whether they are all right.
+# How long a crisis in one conversation keeps the next ones gentle, and how long a pause that has run out owes the
+# question whether they are all right.
 RECENT_CRISIS_DAYS = 30
 
 _TURN_CONTEXT_SQL = f"""
@@ -240,9 +240,10 @@ select
                                                    as recent_crisis,
   (select jsonb_build_object(
             'id', cp.id, 'user_id', cp.user_id, 'thread_id', cp.thread_id, 'started_at', cp.started_at,
-            'ends_at', cp.ends_at, 'reason', cp.reason)
+            'ends_at', cp.ends_at, 'checked_at', cp.checked_at,
+            'reason', cp.reason)
      from public.chat_pauses cp
-    where cp.user_id = t.user_id and cp.thread_id = t.id and cp.ends_at <= now()
+    where cp.user_id = t.user_id and cp.ends_at <= now()
       and cp.ends_at > now() - interval '{RECENT_CRISIS_DAYS} days'
     order by cp.started_at desc limit 1)          as pause
 from (select {COLUMNS}, understanding, safety from public.threads

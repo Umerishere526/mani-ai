@@ -30,12 +30,3 @@ def test_a_framework_stage_without_its_purpose_cannot_be_seeded_active():
     framework = parse_framework(FRAMEWORKS_DIR / "abcde.md")
     framework["stages"]["belief"].pop("purpose")
     assert missing_for_activation(framework) == ["stages.belief.purpose"]
-
-
-def test_the_prompt_asks_the_risk_classifications_clarifying_question_word_for_word():
-    """S5 (PROVISIONAL: clinician sign-off required before deploy): the client's Risk Classification answers each
-    MEDIUM phrase with one direct question in her words; a paraphrase drifts from what she approved."""
-    safety = parse_prompt(PROMPTS_DIR / "mani.md")["content"].split("# Safety", 1)[1].split("\n# ", 1)[0]
-    assert '"Are you thinking about hurting yourself, or are you feeling overwhelmed?"' in safety
-    for medium in ("I feel numb", "I wish I could disappear", "I'm exhausted with life"):
-        assert medium in safety, medium

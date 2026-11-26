@@ -63,32 +63,16 @@ def test_each_swap_is_recorded_with_its_word_and_the_chosen_question_is_swapped_
     assert reply.enforced == ["forbidden_word:land", "forbidden_word:stability"]
 
 
-def test_a_banned_line_is_taken_out_unless_it_is_all_the_reply_says_or_it_names_help_on_a_guarded_turn():
-    """Safety Guardrails section 6: lines Mani never says, cut on crisis turns too (CR-6, manasa 2026-11-25), except a
-    sentence that also names where to get help. PROVISIONAL: clinician sign-off required before deploy."""
+def test_a_banned_line_is_taken_out_unless_it_is_all_the_reply_says_or_the_turn_is_guarded():
+    """Safety Guardrails section 6: lines Mani never says."""
     reply = sent("I'm here for you. That week sounds long.", "What happened on Friday?")
     assert reply.text == "That week sounds long.\n\nWhat happened on Friday?"
     assert reply.enforced == [enforce.BANNED_LINE_REMOVED]
     alone = sent("You’re not alone.")
     assert alone.text == "You’re not alone." and alone.enforced == [enforce.BANNED_LINE_KEPT]
-    guarded = sent("I'm not going anywhere. Please call 988 now.", guarded=True, open_chat=False)
-    assert guarded.text == "Please call 988 now."
-    assert guarded.enforced == [enforce.BANNED_LINE_REMOVED]
-    with_help = sent("You're not alone, call 988 now.", guarded=True, open_chat=False)
-    assert with_help.text == "You're not alone, call 988 now."
-    assert with_help.enforced == [enforce.BANNED_LINE_KEPT]
-
-
-@pytest.mark.parametrize("line", [
-    "I'm not going anywhere.", "I'm still here with you.", "I'll be here when you come back.", "I’m here with you.",
-    "What you're carrying is heavier than I can hold on my own.", "This is more than I can hold.",
-])
-def test_a_presence_or_burden_line_is_taken_out(line):
-    """CR-6, manasa's crisis test (2026-11-25): "heavier than I can hold" made the person a burden, and "I'm not going
-    anywhere" promised a presence Mani cannot give. PROVISIONAL: clinician sign-off required before deploy."""
-    reply = sent(f"{line} That week sounds long.", "What happened on Friday?")
-    assert reply.text == "That week sounds long.\n\nWhat happened on Friday?"
-    assert reply.enforced == [enforce.BANNED_LINE_REMOVED]
+    guarded = sent("You're not alone. Please call 988 now.", guarded=True, open_chat=False)
+    assert guarded.text == "You're not alone. Please call 988 now."
+    assert guarded.enforced == [enforce.BANNED_LINE_KEPT]
 
 
 def test_codes_fixed_safety_words_go_out_untouched():

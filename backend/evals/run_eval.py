@@ -140,7 +140,7 @@ async def reply(http, settings, v, system, case, offers: tuple[str, ...]) -> dic
 # person was sent under the settings in force.
 FIXED = {
     "pause": lambda turn, settings: crisis.pause_reply(turn.get("about"), settings.crisis_pause_seconds),
-    "return_check": lambda turn, settings: crisis.return_check_reply(turn.get("about")),
+    "return_check": lambda turn, settings: crisis.RETURN_CHECK_REPLY,
 }
 
 

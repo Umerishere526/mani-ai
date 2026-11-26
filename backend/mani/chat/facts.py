@@ -8,7 +8,6 @@ from mani.chat.decide import OFFER_FROM_MESSAGE
 from mani.chat.greeting import style_label
 from mani.chat.pause import ReturnCheck
 from mani.chat.safety import State
-from mani.chat.worry import Standing
 from mani.chat.techniques import FEELINGS, FIRST_STAGE_OPENING, STEPS, Registry, line_of, stages_of
 from mani.db.threads import TurnContext
 from mani.models.rows import TechniqueState
@@ -18,15 +17,6 @@ from mani.prompts import cache, composer
 SAID_SHOWN = 6
 OPENERS_SHOWN = 4
 NO_OFFER = "You cannot offer a set of questions in this reply: never ask whether they would like to try one."
-# While danger is held, until they say they are safe or someone is with them (CR-3).
-HELD_DANGER = ("Danger is open and not yet resolved: unless their message says they are safe or someone is with them, "
-               "this reply keeps the same emergency guidance (911 or the nearest emergency department, 988 to call or "
-               "text, and someone to be with them now) and never step it down, such as to a helpline alone or to not "
-               "telling anyone.")
-# The question of immediate danger to themselves (CR-1).
-IMMEDIACY_ASK = ("this reply asks directly, before anything else: are they alone right now, do they have a plan or "
-                 "something they could use, do they feel they might act on it tonight. No reflective or exploring "
-                 "question until they answer it.")
 # What a tap on Start says while the turn is held for safety: the set does not start, so its first line is not said.
 HELD_START = ("They tapped to start the set, but this reply is about their safety: it does not start now and you never "
               "say its line.")
@@ -64,11 +54,10 @@ def system_prompt(config: cache.Config, ctx: TurnContext, *, summary_due: bool) 
 def facts(
     ctx: TurnContext, config: cache.Config, *, record: dict, style: str, running: TechniqueState | None,
     open_offer: TechniqueState | None, event: str | None, wants_title: bool, return_check: ReturnCheck | None,
-    answering_return: str | None, end_check_asked: bool, holding: bool, person_messages: int, stood: Standing,
+    answering_return: str | None, end_check_asked: bool, holding: bool, person_messages: int, state: State,
 ) -> str:
     """What this reply needs to know that the conversation does not show. `holding`: the turn is held for safety, so
     code moves, starts and offers nothing, and nothing here invites it."""
-    state = stood.state
     safety = state.value
     lines = [f"Their style: {style_label(style)}."]
     if notes := record.get(rec.NOTES):
@@ -88,10 +77,6 @@ def facts(
         lines.append(f"They finished in this conversation: {', '.join(finished)}. Never offer a set again.")
     if safety != "clear":
         lines.append(f"A safety worry is open in this conversation ({safety}). Judge their message for it first.")
-    if state is State.DANGER:
-        # CR-3. PROVISIONAL: clinician sign-off required before deploy.
-        lines.append(HELD_DANGER)
-    lines += _immediacy_lines(stood)
     if not offerable(config, record=record, running=running, open_offer=open_offer, holding=holding,
                      person_messages=person_messages, state=state):
         lines.append(NO_OFFER)
@@ -201,17 +186,6 @@ def _running_line(framework, phase: str | None, *, held: bool) -> str:
             f"\"{line_of(framework, stages[at])}\"). Stay on it while it helps.{after}")
 
 
-def _immediacy_lines(stood: Standing) -> list[str]:
-    """The question of immediate danger to themselves: asked before anything else once they confirm the thoughts, and
-    again until they answer it (CR-1). PROVISIONAL: clinician sign-off required before deploy."""
-    if stood.immediacy == rec.IMMEDIACY_OPEN:
-        return [f"They have spoken of not wanting to be here or of hurting themselves, and you do not yet know whether "
-                f"they are in immediate danger. Unless their message answers it, {IMMEDIACY_ASK}"]
-    if stood.immediacy is None and stood.state is not State.CLEAR and stood.about in (None, "themselves"):
-        return [f"If their message confirms thoughts of not being here or of hurting themselves, {IMMEDIACY_ASK}"]
-    return []
-
-
 def _pause_lines(ctx: TurnContext, return_check: ReturnCheck | None, answering_return: str | None) -> list[str]:
     if return_check is not None:
         return [f"Their chat was paused earlier because of a safety worry ({return_check.reason or 'no reason kept'}). "
@@ -219,9 +193,7 @@ def _pause_lines(ctx: TurnContext, return_check: ReturnCheck | None, answering_r
     if answering_return is not None:
         reason = ctx.pause.reason if ctx.pause is not None else None
         return [f"Your last reply asked how they are after a pause for a safety worry ({reason or 'no reason kept'}). "
-                "This message answers it: judge it for safety. If they say they are all right, accept it warmly in a "
-                "sentence, mark says_safe, and ask nothing: code adds one question about who they could reach. If they "
-                "say neither that they are safe nor that someone is with them, the danger stays open."]
+                "This message answers it: judge it for safety."]
     if ctx.recent_crisis:
         return ["Another conversation of theirs raised a safety worry recently. Go gently; never mention it."]
     return []

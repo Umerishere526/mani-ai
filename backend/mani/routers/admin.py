@@ -5,7 +5,7 @@ import datetime as dt
 import uuid
 
 from fastapi import APIRouter, Query
-from pydantic import BaseModel, Field
+from pydantic import BaseModel
 
 from mani import storage
 from mani.auth.deps import AdminUser
@@ -203,32 +203,6 @@ async def list_crisis_events(conn: AdminConn, unresolved: bool = True) -> list[C
         unresolved,
     )
     return [CrisisEventOut(**dict(r)) for r in rows]
-
-
-class CrisisResolveIn(BaseModel):
-    # What the admin did or found, kept with the event.
-    resolution: str = Field(min_length=1, max_length=2000)
-
-
-@router.post("/crisis-events/{event_id}/resolve", response_model=CrisisEventOut)
-async def resolve_crisis_event(conn: AdminConn, event_id: uuid.UUID, body: CrisisResolveIn) -> CrisisEventOut:
-    """Mark a flagged conversation as seen, with the admin's note, so it leaves the unresolved list (S16). Nothing
-    alerts anyone when an event is recorded. PROVISIONAL: clinician sign-off required before deploy."""
-    row = await conn.fetchrow(
-        """
-        update admin.crisis_events set resolution = $2, resolved_at = now()
-         where id = $1 and resolved_at is null
-        returning id, thread_id, user_id, reason, detected_at, resolution, resolved_at
-        """,
-        event_id, body.resolution.strip(),
-    )
-    if row is not None:
-        return CrisisEventOut(**dict(row))
-    if await conn.fetchval("select exists (select 1 from admin.crisis_events where id = $1)", event_id):
-        raise ServiceError(f"crisis event {event_id} is already resolved", ErrorCategory.CONFLICT,
-                           user_message="That crisis event is already resolved.")
-    raise ServiceError(f"crisis event {event_id} not found", ErrorCategory.NOT_FOUND,
-                       user_message="That crisis event does not exist.")
 
 
 @router.get("/threads", response_model=AdminThreadListOut)

@@ -95,7 +95,6 @@ def to_turn(turn: Turn) -> TurnOut:
         crisis_detected=turn.crisis_detected,
         paused_from=turn.paused_from,
         paused_until=turn.paused_until,
-        paused_for=turn.paused_for,
         was_duplicate=turn.was_duplicate,
         understanding=turn.understanding if debug else None,
         trace=turn.trace if debug else None,
@@ -107,7 +106,6 @@ def to_profile(profile: Profile | None, pause: Pause | None = None) -> ProfileOu
     paused = {
         "chat_paused_from": pause.started_at if pause else None,
         "chat_paused_until": pause.ends_at if pause else None,
-        "chat_paused_for": pause.paused_for if pause else None,
     }
     if profile is None:
         return ProfileOut(**paused)

@@ -1,9 +1,8 @@
-# ABOUTME: Where a conversation stands on safety, how the model's judgment of each message moves it, and the client's
-# ABOUTME: high-risk phrases that raise a lower judgment to danger. The turn's rule (chat/worry.py) reads the state.
+# ABOUTME: Where a conversation stands on safety, and how the model's judgment of each message moves it. The turn's rule
+# ABOUTME: (chat/worry.py) reads the state; code owns it, the model only judges each message.
 
 from __future__ import annotations
 
-import re
 from enum import StrEnum
 
 
@@ -54,26 +53,3 @@ def after(
     if judged is State.UNSURE and about in HELD and state is State.DANGER and danger_about in (None, about):
         return State.DANGER
     return judged
-
-
-# The client's Risk Classification, section 2 (HIGH_RISK: "ANY = HIGH_RISK"), as exact phrases: a message holding one
-# that the model judged below danger is danger about themselves (S3, S4). Short and exact on purpose; it only raises,
-# and apostrophes are dropped on both sides so "don't" and "dont" match. PROVISIONAL: clinician sign-off required
-# before deploy.
-HIGH_RISK_PHRASES = (
-    "i want to die", "i dont want to live", "i wish i were dead", "i want to hurt myself", "i feel like ending it",
-    "i might kill myself", "this is my last message", "everyone is better off without me",
-)
-# Left to the model's reading, not the floor: the Risk Classification's "I have a plan", "I gave my things away" and
-# "I wrote letters" are everyday words out of context ("I have a plan for the weekend"), and a false alarm is the
-# lockout the client objected to on 2026-11-20.
-
-
-def _plain(text: str) -> str:
-    return " ".join(re.sub(r"['\u2018\u2019]", "", text.lower()).split())
-
-
-def high_risk(message: str) -> bool:
-    """Whether their message holds one of the client's high-risk phrases."""
-    plain = _plain(message)
-    return any(re.search(rf"\b{re.escape(phrase)}\b", plain) for phrase in HIGH_RISK_PHRASES)

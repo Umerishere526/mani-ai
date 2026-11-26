@@ -1,12 +1,12 @@
-# ABOUTME: When a turn in the conversation a pause began in asks whether they are all right, and the refusal every chat
-# ABOUTME: route gives while a person is paused. Pure: the turn asks with its context.
+# ABOUTME: When a turn after a pause asks whether they are all right, and the refusal every chat route gives while a
+# ABOUTME: person is paused. Pure: the turn asks with its context.
 
 from __future__ import annotations
 
 import uuid
 from dataclasses import dataclass
 
-from mani.chat import crisis, record
+from mani.chat import record
 from mani.db.threads import TurnContext
 from mani.errors import ErrorCategory, ServiceError
 from mani.models.rows import Pause
@@ -21,11 +21,11 @@ class ReturnCheck:
 
 
 def return_check(ctx: TurnContext) -> ReturnCheck | None:
-    """The return check this turn owes for this conversation's latest pause that has run out, or None. Only the
-    conversation the pause began in asks, once per pause, with what that pause rested on; a new conversation opens
-    normally and never raises it (Lolly, 2026-11-25: "I do not want my chat's to start this way. Get rid of it.")."""
+    """The return check this turn owes for the person's latest pause that has run out, or None. Every conversation
+    asks once per pause, with what that pause rested on, until they have said, in any conversation, that they are all
+    right (muhammad, 2026-11-13 and 2026-11-16; 2026-11-19 for the paused conversation too)."""
     held = ctx.pause
-    if held is None or record.return_check_pause(ctx.thread.understanding) == str(held.id):
+    if held is None or held.checked_at is not None or record.return_check_pause(ctx.thread.understanding) == str(held.id):
         return None
     return ReturnCheck(held.id, held.reason)
 
@@ -36,13 +36,11 @@ def answering(ctx: TurnContext) -> str | None:
 
 
 def paused_error(pause: Pause) -> ServiceError:
-    """The refusal every chat route gives while a person is paused, naming where to get help (S9; PROVISIONAL:
-    clinician sign-off required before deploy); the client shows the pause from `paused_from` to `paused_until`, and
-    leads with 911 when `paused_for` is overdose."""
+    """The refusal every chat route gives while a person is paused; the client shows the pause from `paused_from` to
+    `paused_until`."""
     return ServiceError(
         f"chat for user {pause.user_id} is paused until {pause.ends_at.isoformat()}",
         ErrorCategory.CHAT_PAUSED,
-        user_message=f"Your chat with Mani is paused for now. {crisis.IN_DANGER}",
-        details={"paused_from": pause.started_at.isoformat(), "paused_until": pause.ends_at.isoformat(),
-                 "paused_for": pause.paused_for},
+        user_message="Your chat with Mani is paused for now. Please reach out for support.",
+        details={"paused_from": pause.started_at.isoformat(), "paused_until": pause.ends_at.isoformat()},
     )

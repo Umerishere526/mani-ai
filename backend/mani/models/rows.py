@@ -108,8 +108,9 @@ class Pause(Row):
     started_at: dt.datetime
     ends_at: dt.datetime
     reason: str | None = None
-    # What it is for: overdose, or whose danger (worry.Outcome.paused_for); null for a pause from before it was kept.
-    paused_for: str | None = None
+    # When they answered the question after the pause that they are all right; null until then. Conversations other
+    # than the paused one stop asking once it is set (chat/pause.return_check).
+    checked_at: dt.datetime | None = None
 
 
 class TechniqueTried(BaseModel):

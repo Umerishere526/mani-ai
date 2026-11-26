@@ -100,9 +100,6 @@ class TurnOut(BaseModel):
     # When the chat's pause began and until when it runs, set only on the turn that pauses it.
     paused_from: dt.datetime | None = None
     paused_until: dt.datetime | None = None
-    # What the pause this turn started is for: overdose, themselves, someone_else, from_someone or body; null when it
-    # started none or the kind is unknown. A client leads with 911 after an overdose (R90).
-    paused_for: str | None = None
     was_duplicate: bool = False
     # Null unless AI_DEBUG_MODE is on: the conversation's record after this turn (Mani's notes, the frameworks declined
     # or finished, the safety keys the pause rules read).
@@ -141,8 +138,6 @@ class OpeningOut(BaseModel):
     # When the pause running now began and ends; null when chat is open.
     chat_paused_from: dt.datetime | None = None
     chat_paused_until: dt.datetime | None = None
-    # What the pause is for, as TurnOut.paused_for.
-    chat_paused_for: str | None = None
 
 
 class ThreadStartedOut(BaseModel):
@@ -180,8 +175,6 @@ class ProfileOut(BaseModel):
     # When the pause running now began and ends; null when chat is open.
     chat_paused_from: dt.datetime | None = None
     chat_paused_until: dt.datetime | None = None
-    # What the pause is for, as TurnOut.paused_for.
-    chat_paused_for: str | None = None
 
 
 FeedbackRating = Literal["up", "down"]
